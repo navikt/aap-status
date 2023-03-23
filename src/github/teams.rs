@@ -1,38 +1,53 @@
+use std::collections::HashSet;
+use std::fmt::Formatter;
+
+use poll_promise::Promise;
 use serde::{Deserialize, Serialize};
 
 use crate::github::github_client::{GitHubApi, Teams};
 
 impl Teams for GitHubApi {
-    fn teams(
-        &self,
-        url: &String,
-        token: &mut String,
-        callback: impl 'static + Send + FnOnce(ehttp::Response),
-    ) {
+    fn teams(&self, url: &String, token: &String) -> Promise<HashSet<Team>> {
+        println!("Fetching: {}", &url);
 
-        let _url = url.to_string();
         let request = ehttp::Request {
             headers: ehttp::headers(&[
                 ("Accept", "application/vnd.github+json"),
-                ("Access-Control-Allow-Headers", "Link"),
                 ("User-Agent", "Rust-wasm-App"),
                 ("Authorization", format!("Bearer {}", token.trim().to_string()).as_str()),
             ]),
-            ..ehttp::Request::get(&_url)
+            ..ehttp::Request::get(url)
         };
 
-        ehttp::fetch(request, move |result: ehttp::Result<ehttp::Response>| {
-            match result {
+        let (sender, promise) = Promise::new();
+
+        ehttp::fetch(request, move |response| {
+            println!("response: {:?}", &response);
+            match response {
                 Ok(res) => {
-                    callback(res);
+                    match serde_json::from_slice::<HashSet<Team>>(&res.bytes) {
+                        Ok(teams) => {
+                            println!("Parsed {} bytes from slice", teams.len());
+                            sender.send(teams);
+                        }
+                        Err(e) => {
+                            println!("Failed to parse from slice: {:?}", e);
+                            sender.send(HashSet::new());
+                        }
+                    }
                 }
-                Err(e) => println!("Error {:?} from {:?}", e, &_url)
-            }
+                Err(e) => {
+                    println!("Failed to fetch: {}", e);
+                    sender.send(HashSet::new());
+                }
+            };
         });
+
+        promise
     }
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
 pub struct Team {
     pub name: String,
     id: i64,
@@ -43,6 +58,12 @@ pub struct Team {
     url: String,
     html_url: String,
     members_url: String,
-    repositories_url: String,
+    pub repositories_url: String,
     permission: String,
+}
+
+impl std::fmt::Display for Team {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
 }

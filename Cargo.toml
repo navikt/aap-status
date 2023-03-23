@@ -21,7 +21,7 @@ eframe = { version = "0.20.1", default-features = false, features = [
     "persistence",   # Enable restoring app state when restarting the app.
 ] }
 
-parse_link_header = "0.3.3"
+poll-promise = { version = "0.2.0", default-features = false , option = true }
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -32,6 +32,12 @@ tracing-subscriber = "0.3.16"
 console_error_panic_hook = "0.1.7"
 tracing-wasm = "0.2.1"
 wasm-bindgen-futures = "0.4.33"
+
+#[source.crates-io]
+#registry = "git://github.com/rust-lang/crates.io-index.git"
+
+[registries.crates-io]
+protocol = "sparse"
 
 [profile.release]
 opt-level = 2 # fast and small wasm

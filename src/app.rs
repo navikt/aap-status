@@ -2,11 +2,11 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use eframe::epaint::Color32;
-use egui::TextFormat;
-use ehttp::Response;
+use eframe::epaint::text::TextFormat;
 
-use crate::github::github_client::{GitHubApi, Pulls, Runs, Teams};
+use crate::github::github_client::{GitHubApi, Pulls, Repositories, Runs, Teams};
 use crate::github::pulls::PullRequest;
+use crate::github::repositories::Repo;
 use crate::github::runs::WorkflowRuns;
 use crate::github::teams::Team;
 use crate::github::workflows::Workflow;
@@ -22,15 +22,13 @@ impl eframe::App for TemplateApp {
             pr_table,
             run_table,
             state,
-            repositories,
-            new_repo,
             team,
-            teams: _,
-            teams_responses: _,
             github,
             pulls: _,
             workflows: _,
             runs: _,
+            repos: _,
+            teams: _,
         } = self;
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
@@ -62,17 +60,8 @@ impl eframe::App for TemplateApp {
             }
 
             ui.separator();
-            ui.label("Select repositories");
-
             if ui.button("Repositories").clicked() {
                 *state = State::Repositories
-            }
-
-            ui.separator();
-            ui.label("Show teams");
-
-            if ui.button("Teams").clicked() {
-                *state = State::Teams
             }
 
             ui.separator();
@@ -81,56 +70,38 @@ impl eframe::App for TemplateApp {
             if ui.button("Refresh").clicked() {
                 match state {
                     State::Pulls => {
-                        for repo in repositories.clone().into_iter() {
+                        let _repos = self.repos.clone();
+                        for repo in _repos.lock().unwrap().clone().into_iter() {
                             let _pulls = self.pulls.clone();
-                            github.pull_requests(token, &repo.to_string(), move |response: Vec<PullRequest>| {
-                                *_pulls.lock().unwrap().entry(repo).or_default() = response;
+                            github.pull_requests(token, &repo.clone().name, move |response: Vec<PullRequest>| {
+                                *_pulls.lock().unwrap().entry(repo.name).or_default() = response;
                             });
                         }
                     }
                     State::Runs => {
-                        for repo in repositories.clone().into_iter() {
+                        let _repos = self.repos.clone();
+                        for repo in _repos.lock().unwrap().clone().into_iter() {
                             let _runs = self.runs.clone();
-                            github.runs(token, &repo.to_string(), move |response: WorkflowRuns| {
-                                *_runs.lock().unwrap().entry(repo).or_insert(WorkflowRuns::default()) = response;
+                            github.runs(token, &repo.clone().name, move |response: WorkflowRuns| {
+                                *_runs.lock().unwrap().entry(repo.name).or_insert(WorkflowRuns::default()) = response;
                             });
                         }
-                        // for repo in repositories.clone().into_iter() {
-                        //     let _workflows = self.workflows.clone();
-                        //     github.workflows(token, &repo.to_string(), move |response: Vec<Workflow>| {
-                        //         *_workflows.lock().unwrap().entry(repo).or_default() = response;
-                        //     });
-                        // }
                     }
-                    State::Teams => {
+                    State::Repositories => {
+                        let _repos = self.repos.clone();
+                        github.repositories(token, &team.clone(), move |response| {
+                            *_repos.lock().unwrap() = response
+                        });
+
+                        let base_url = String::from("https://api.github.com/orgs/navikt/teams?per_page=100&page=");
+
                         for i in 1..=3 {
-                            let _teams_responses = self.teams_responses.clone();
-                            let url = format!("https://api.github.com/orgs/navikt/teams?per_page=100&page={}", i);
-
-                            github.teams(&url, token, move |teams_response| {
-                                _teams_responses.lock().unwrap().push(teams_response.clone());
-                            });
+                            let url = format!("{}{}", base_url, i);
+                            let teams = self.teams.clone();
+                            let teams_to_add = github.teams(&url, token).block_and_take();
+                            teams.lock().unwrap().extend(teams_to_add.into_iter());
                         }
-
-                        let responses = self.teams_responses.clone();
-                        let teams = self.teams.clone();
-                        *teams.lock().unwrap() = responses.lock().unwrap().clone().into_iter().flat_map(|res| {
-                            match serde_json::from_slice::<Vec<Team>>(&res.bytes) {
-                                Ok(teams) => {
-                                    println!("parsed {} teams from_slice", &teams.len());
-                                    teams.clone()
-                                },
-                                Err(e) => {
-                                    println!("error while parsing teams from_slice: {:?} ", e);
-                                    vec![]
-                                }
-                            }
-                        }).collect::<Vec<_>>();
-
-                        ctx.request_repaint();
-
                     }
-                    _ => println!("Unsupported refresh")
                 }
             }
         });
@@ -169,9 +140,29 @@ impl eframe::App for TemplateApp {
                 State::Repositories => {
                     ui.heading("Repositories");
 
-                    ui.label(format!("Total: {}", repositories.len()));
+                    ui.label("Your team:");
 
-                    repositories.clone().into_iter().for_each(|repo| {
+                    ui.horizontal_wrapped(|ui| {
+                        if ui.text_edit_singleline(team).ctx.input().key_pressed(egui::Key::Enter) {
+                            *team = team.to_string();
+                        }
+                    });
+
+                    // ui.label(".. or select from list:");
+                    egui::ComboBox::from_label(".. or select from list:")
+                        .selected_text(format!("{:?}", team))
+                        .show_ui(ui, |ui| {
+                            ui.style_mut().wrap = Some(false);
+                            ui.set_min_width(60.0);
+
+                            self.teams.lock().unwrap().clone().into_iter().for_each(|fetched_team| {
+                                ui.selectable_value(team, fetched_team.name.clone(), &fetched_team.name.to_string());
+                            });
+                        });
+
+                    ui.label(format!("Total: {}", self.repos.clone().lock().unwrap().len()));
+
+                    self.repos.clone().lock().unwrap().iter().for_each(|repo| {
                         ui.horizontal_wrapped(|ui| {
                             use egui::text::LayoutJob;
                             let mut job = LayoutJob::default();
@@ -181,47 +172,50 @@ impl eframe::App for TemplateApp {
                             };
                             job.append("❌", 0.0, red_text);
                             if ui.button(job).clicked() {
-                                repositories.remove(&repo);
+                                println!("button remove for {:?} clicked", &repo.name);
+                                // self.repos.lock().unwrap().clone().remove(repo);
                             };
-                            ui.label(&repo);
+                            ui.label(&repo.name);
                         });
                     });
 
-                    ui.separator();
-
-                    ui.label("Add repository");
-                    ui.horizontal(|ui| {
-                        if ui.text_edit_singleline(new_repo).ctx.input().key_pressed(egui::Key::Enter) {
-                            repositories.insert(new_repo.to_string());
-                        }
-
-                        use egui::text::LayoutJob;
-                        let mut job = LayoutJob::default();
-                        let green_text = TextFormat {
-                            color: Color32::from_rgb(100, 255, 146),
-                            ..Default::default()
-                        };
-
-                        job.append("+", 0.0, green_text);
-
-                        if ui.button(job).clicked() {
-                            repositories.insert(new_repo.clone());
-                        }
-                    });
-                }
-                State::Teams => {
-                    ui.heading("Teams");
-                    ui.label(format!("Found {} teams in org/navikt", self.teams.lock().unwrap().clone().len()));
-
-                    let show_text = team.clone().map_or(String::from("Not selected"), |map| { map.name });
-
-                    egui::ComboBox::from_label("team")
-                        .selected_text(format!("{:?}", show_text))
-                        .show_ui(ui, |ui| {
-                            self.teams.lock().unwrap().clone().into_iter().for_each(|t| {
-                                ui.selectable_value(team, Some(t.clone()), &t.name);
-                            });
-                        });
+                    // repositories.clone().into_iter().for_each(|repo| {
+                    //     ui.horizontal_wrapped(|ui| {
+                    //         use egui::text::LayoutJob;
+                    //         let mut job = LayoutJob::default();
+                    //         let red_text = TextFormat {
+                    //             color: Color32::from_rgb(255, 100, 100),
+                    //             ..Default::default()
+                    //         };
+                    //         job.append("❌", 0.0, red_text);
+                    //         if ui.button(job).clicked() {
+                    //             repositories.remove(&repo);
+                    //         };
+                    //         ui.label(&repo);
+                    //     });
+                    // });
+                    //
+                    // ui.separator();
+                    //
+                    // ui.label("Add repository");
+                    // ui.horizontal(|ui| {
+                    //     if ui.text_edit_singleline(new_repo).ctx.input().key_pressed(egui::Key::Enter) {
+                    //         repositories.insert(new_repo.to_string());
+                    //     }
+                    //
+                    //     use egui::text::LayoutJob;
+                    //     let mut job = LayoutJob::default();
+                    //     let green_text = TextFormat {
+                    //         color: Color32::from_rgb(100, 255, 146),
+                    //         ..Default::default()
+                    //     };
+                    //
+                    //     job.append("+", 0.0, green_text);
+                    //
+                    //     if ui.button(job).clicked() {
+                    //         repositories.insert(new_repo.clone());
+                    //     }
+                    // });
                 }
             };
         });
@@ -241,29 +235,13 @@ impl Default for TemplateApp {
             pr_table: Table::default(),
             run_table: Table::default(),
             state: State::Repositories,
-            repositories: HashSet::from([
-                "aap-andre-ytelser".to_string(),
-                "aap-api".to_string(),
-                "aap-bot".to_string(),
-                "aap-devtools".to_string(),
-                "aap-inntekt".to_string(),
-                "aap-libs".to_string(),
-                "aap-meldeplikt".to_string(),
-                "aap-oppgavestyring".to_string(),
-                "aap-personopplysninger".to_string(),
-                "aap-sink".to_string(),
-                "aap-sykepengedager".to_string(),
-                "aap-utbetaling".to_string(),
-                "aap-vedtak".to_string(),
-            ]),
-            new_repo: String::from("<repo>"),
-            team: None,
-            teams: Arc::new(Mutex::new(vec![])),
-            teams_responses: Arc::new(Mutex::new(vec![])),
+            team: String::from("aap"),
             github: GitHubApi::default(),
             pulls: Arc::new(Mutex::new(BTreeMap::new())),
             workflows: Arc::new(Mutex::new(BTreeMap::new())),
             runs: Arc::new(Mutex::new(BTreeMap::new())),
+            repos: Arc::new(Mutex::new(HashSet::new())),
+            teams: Arc::new(Mutex::new(HashSet::new())),
         }
     }
 }
@@ -288,7 +266,6 @@ impl TemplateApp {
 #[derive(serde::Deserialize, serde::Serialize)]
 pub enum State {
     Repositories,
-    Teams,
     Pulls,
     Runs,
 }
@@ -302,15 +279,7 @@ pub struct TemplateApp {
     pr_table: Table,
     run_table: Table,
     state: State,
-    repositories: HashSet<String>,
-    new_repo: String,
-    team: Option<Team>,
-
-    #[serde(skip)]
-    teams: Arc<Mutex<Vec<Team>>>,
-
-    #[serde(skip)]
-    teams_responses: Arc<Mutex<Vec<Response>>>,
+    team: String,
 
     #[serde(skip)]
     github: GitHubApi,
@@ -323,4 +292,10 @@ pub struct TemplateApp {
 
     #[serde(skip)]
     runs: Arc<Mutex<BTreeMap<String, WorkflowRuns>>>,
+
+    #[serde(skip)]
+    repos: Arc<Mutex<HashSet<Repo>>>,
+
+    #[serde(skip)]
+    teams: Arc<Mutex<HashSet<Team>>>,
 }

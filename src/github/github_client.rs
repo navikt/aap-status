@@ -1,5 +1,11 @@
+use std::collections::HashSet;
+
+use poll_promise::Promise;
+
 use crate::github::pulls::PullRequest;
+use crate::github::repositories::Repo;
 use crate::github::runs::WorkflowRuns;
+use crate::github::teams::Team;
 use crate::github::workflows::Workflow;
 
 pub struct GitHubApi {}
@@ -15,6 +21,21 @@ pub trait Pulls {
         repo: &String,
         callback: impl 'static + Send + FnOnce(Vec<PullRequest>),
     );
+}
+
+pub trait Repositories {
+    fn repositories(
+        &self,
+        token: &mut String,
+        team_name: &String,
+        callback: impl 'static + Send + FnOnce(HashSet<Repo>),
+    );
+
+    fn repos(
+        &self,
+        url: &String,
+        token: &String,
+    ) -> Promise<HashSet<Repo>>;
 }
 
 pub trait Runs {
@@ -39,7 +60,6 @@ pub trait Teams {
     fn teams(
         &self,
         url: &String,
-        token: &mut String,
-        callback: impl 'static + Send + FnOnce(ehttp::Response),
-    );
+        token: &String,
+    ) -> Promise<HashSet<Team>>;
 }
