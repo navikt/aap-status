@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap};
 
 use egui::{Color32, TextFormat, Ui};
 

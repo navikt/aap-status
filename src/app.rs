@@ -92,15 +92,6 @@ impl eframe::App for TemplateApp {
                         github.repositories(token, &team.clone(), move |response| {
                             *_repos.lock().unwrap() = response
                         });
-
-                        let base_url = String::from("https://api.github.com/orgs/navikt/teams?per_page=100&page=");
-
-                        for i in 1..=3 {
-                            let url = format!("{}{}", base_url, i);
-                            let teams = self.teams.clone();
-                            let teams_to_add = github.teams(&url, token).block_and_take();
-                            teams.lock().unwrap().extend(teams_to_add.into_iter());
-                        }
                     }
                 }
             }
@@ -140,29 +131,49 @@ impl eframe::App for TemplateApp {
                 State::Repositories => {
                     ui.heading("Repositories");
 
-                    ui.label("Your team:");
-
                     ui.horizontal_wrapped(|ui| {
                         if ui.text_edit_singleline(team).ctx.input().key_pressed(egui::Key::Enter) {
                             *team = team.to_string();
                         }
+
+                        if ui.button("fetch repos").clicked() {
+                            let _repos = self.repos.clone();
+                            github.repositories(token, &team.clone(), move |response| {
+                                *_repos.lock().unwrap() = response
+                            });
+                        }
                     });
 
-                    // ui.label(".. or select from list:");
-                    egui::ComboBox::from_label(".. or select from list:")
-                        .selected_text(format!("{:?}", team))
-                        .show_ui(ui, |ui| {
-                            ui.style_mut().wrap = Some(false);
-                            ui.set_min_width(60.0);
+                    ui.label(format!("Teams in navikt: {}", self.teams.clone().lock().unwrap().len()));
+                    ui.horizontal_wrapped(|ui| {
+                        egui::ComboBox::from_label("")
+                            .selected_text(format!("{:?}", team))
+                            .show_ui(ui, |ui| {
+                                ui.style_mut().wrap = Some(false);
+                                ui.set_min_width(60.0);
 
-                            self.teams.lock().unwrap().clone().into_iter().for_each(|fetched_team| {
-                                ui.selectable_value(team, fetched_team.name.clone(), &fetched_team.name.to_string());
+                                self.teams.lock().unwrap().clone().into_iter().for_each(|fetched_team| {
+                                    ui.selectable_value(team, fetched_team.name.clone(), &fetched_team.name.to_string());
+                                });
                             });
-                        });
+                        if ui.button("fetch teams from github/navikt").clicked() {
+                            let base_url = String::from("https://api.github.com/orgs/navikt/teams?per_page=100&page=");
 
-                    ui.label(format!("Total: {}", self.repos.clone().lock().unwrap().len()));
+                            for i in 1..=3 {
+                                let url = format!("{}{}", base_url, i);
+                                let teams = self.teams.clone();
+                                let teams_to_add = github.teams(&url, token).block_and_take();
+                                teams.lock().unwrap().extend(teams_to_add.into_iter());
+                            }
+                        }
+                    });
 
-                    self.repos.clone().lock().unwrap().iter().for_each(|repo| {
+                    ui.separator();
+
+                    ui.label(format!("Repositories in your selected team {}: {}", team, self.repos.clone().lock().unwrap().len()));
+                    let _repos = self.repos.lock().unwrap().clone();
+
+                    _repos.into_iter().for_each(|repo| {
                         ui.horizontal_wrapped(|ui| {
                             use egui::text::LayoutJob;
                             let mut job = LayoutJob::default();
@@ -173,49 +184,11 @@ impl eframe::App for TemplateApp {
                             job.append("❌", 0.0, red_text);
                             if ui.button(job).clicked() {
                                 println!("button remove for {:?} clicked", &repo.name);
-                                // self.repos.lock().unwrap().clone().remove(repo);
+                                self.repos.clone().lock().unwrap().remove(&repo);
                             };
                             ui.label(&repo.name);
                         });
                     });
-
-                    // repositories.clone().into_iter().for_each(|repo| {
-                    //     ui.horizontal_wrapped(|ui| {
-                    //         use egui::text::LayoutJob;
-                    //         let mut job = LayoutJob::default();
-                    //         let red_text = TextFormat {
-                    //             color: Color32::from_rgb(255, 100, 100),
-                    //             ..Default::default()
-                    //         };
-                    //         job.append("❌", 0.0, red_text);
-                    //         if ui.button(job).clicked() {
-                    //             repositories.remove(&repo);
-                    //         };
-                    //         ui.label(&repo);
-                    //     });
-                    // });
-                    //
-                    // ui.separator();
-                    //
-                    // ui.label("Add repository");
-                    // ui.horizontal(|ui| {
-                    //     if ui.text_edit_singleline(new_repo).ctx.input().key_pressed(egui::Key::Enter) {
-                    //         repositories.insert(new_repo.to_string());
-                    //     }
-                    //
-                    //     use egui::text::LayoutJob;
-                    //     let mut job = LayoutJob::default();
-                    //     let green_text = TextFormat {
-                    //         color: Color32::from_rgb(100, 255, 146),
-                    //         ..Default::default()
-                    //     };
-                    //
-                    //     job.append("+", 0.0, green_text);
-                    //
-                    //     if ui.button(job).clicked() {
-                    //         repositories.insert(new_repo.clone());
-                    //     }
-                    // });
                 }
             };
         });
@@ -284,18 +257,18 @@ pub struct TemplateApp {
     #[serde(skip)]
     github: GitHubApi,
 
-    #[serde(skip)]
+    // #[serde(skip)]
     pulls: Arc<Mutex<BTreeMap<String, Vec<PullRequest>>>>,
 
-    #[serde(skip)]
+    // #[serde(skip)]
     workflows: Arc<Mutex<BTreeMap<String, Vec<Workflow>>>>,
 
-    #[serde(skip)]
+    // #[serde(skip)]
     runs: Arc<Mutex<BTreeMap<String, WorkflowRuns>>>,
 
-    #[serde(skip)]
+    // #[serde(skip)]
     repos: Arc<Mutex<HashSet<Repo>>>,
 
-    #[serde(skip)]
+    // #[serde(skip)]
     teams: Arc<Mutex<HashSet<Team>>>,
 }
