@@ -8,17 +8,14 @@ use crate::github::runs::WorkflowRuns;
 use crate::github::teams::Team;
 use crate::github::workflows::Workflow;
 
+#[derive(Default)]
 pub struct GitHubApi {}
-
-impl Default for GitHubApi {
-    fn default() -> Self { Self {} }
-}
 
 pub trait Pulls {
     fn pull_requests(
         &self,
         token: &mut String,
-        repo: &String,
+        repo: &str,
         callback: impl 'static + Send + FnOnce(Vec<PullRequest>),
     );
 }
@@ -27,14 +24,14 @@ pub trait Repositories {
     fn repositories(
         &self,
         token: &mut String,
-        team_name: &String,
+        team_name: &str,
         callback: impl 'static + Send + FnOnce(HashSet<Repo>),
     );
 
     fn repos(
         &self,
-        url: &String,
-        token: &String,
+        url: &str,
+        token: &str,
     ) -> Promise<HashSet<Repo>>;
 }
 
@@ -42,7 +39,7 @@ pub trait Runs {
     fn runs(
         &self,
         token: &mut String,
-        repo: &String,
+        repo: &str,
         callback: impl 'static + Send + FnOnce(WorkflowRuns),
     );
 }
@@ -51,7 +48,7 @@ pub trait Workflows {
     fn workflows(
         &self,
         token: &mut String,
-        repo: &String,
+        repo: &str,
         callback: impl 'static + Send + FnOnce(Vec<Workflow>),
     );
 }
@@ -59,7 +56,7 @@ pub trait Workflows {
 pub trait Teams {
     fn teams(
         &self,
-        url: &String,
-        token: &String,
+        url: &str,
+        token: &str,
     ) -> Promise<HashSet<Team>>;
 }

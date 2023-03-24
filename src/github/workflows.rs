@@ -6,7 +6,7 @@ impl Workflows for GitHubApi {
     fn workflows(
         &self,
         token: &mut String,
-        repo: &String,
+        repo: &str,
         callback: impl 'static + Send + FnOnce(Vec<Workflow>),
     ) {
         let url = format!("https://api.github.com/repos/navikt/{}/actions/workflows", repo);
@@ -15,7 +15,7 @@ impl Workflows for GitHubApi {
             headers: ehttp::headers(&[
                 ("Accept", "application/vnd.github+json"),
                 ("User-Agent", "rust web-api-client demo"),
-                ("Authorization", format!("Bearer {}", token.trim().to_string()).as_str()),
+                ("Authorization", format!("Bearer {}", token.trim()).as_str()),
             ]),
             ..ehttp::Request::get(&url)
         };

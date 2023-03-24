@@ -34,11 +34,11 @@ impl eframe::App for TemplateApp {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.label("Personal Access Token:");
-                ui.add(egui::TextEdit::singleline(token).password(!show_token.clone()));
+                ui.add(egui::TextEdit::singleline(token).password(*show_token));
 
-                if ui.add(egui::SelectableLabel::new(show_token.clone(), "👁"))
+                if ui.add(egui::SelectableLabel::new(*show_token, "👁"))
                     .on_hover_text("Show/hide token")
-                    .clicked() { *show_token = !show_token.clone(); };
+                    .clicked() { *show_token = !*show_token; };
             });
         });
 
@@ -153,7 +153,7 @@ impl eframe::App for TemplateApp {
                                 ui.set_min_width(60.0);
 
                                 self.teams.lock().unwrap().clone().into_iter().for_each(|fetched_team| {
-                                    ui.selectable_value(team, fetched_team.name.clone(), &fetched_team.name.to_string());
+                                    ui.selectable_value(team, fetched_team.name.clone(), fetched_team.name);
                                 });
                             });
                         if ui.button("fetch teams from github/navikt").clicked() {

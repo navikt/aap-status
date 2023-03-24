@@ -13,7 +13,7 @@ impl Repositories for GitHubApi {
     fn repositories(
         &self,
         token: &mut String,
-        team_name: &String,
+        team_name: &str,
         callback: impl 'static + Send + FnOnce(HashSet<Repo>),
     ) {
         let teams_acc: Arc<Mutex<HashSet<Team>>> = Arc::new(Mutex::new(HashSet::new()));
@@ -26,7 +26,7 @@ impl Repositories for GitHubApi {
             teams.lock().unwrap().extend(teams_to_add.into_iter());
         }
 
-        match teams_acc.lock().unwrap().clone().into_iter().find(|team| { &team.name == team_name }) {
+        match teams_acc.lock().unwrap().clone().into_iter().find(|team| { team.name == team_name }) {
             None => println!("Fant ikke ditt team"),
             Some(team) => {
                 println!("Fant teamet: {}", team);
@@ -36,7 +36,7 @@ impl Repositories for GitHubApi {
         };
     }
 
-    fn repos(&self, url: &String, token: &String) -> Promise<HashSet<Repo>> {
+    fn repos(&self, url: &str, token: &str) -> Promise<HashSet<Repo>> {
         let paginated_url = format!("{}{}", url, "?per_page=100");
         println!("Fetching: {}", &paginated_url);
 
@@ -44,7 +44,7 @@ impl Repositories for GitHubApi {
             headers: ehttp::headers(&[
                 ("Accept", "application/vnd.github+json"),
                 ("User-Agent", "Rust-wasm-App"),
-                ("Authorization", format!("Bearer {}", token.trim().to_string()).as_str()),
+                ("Authorization", format!("Bearer {}", token.trim()).as_str()),
             ]),
             ..ehttp::Request::get(paginated_url)
         };

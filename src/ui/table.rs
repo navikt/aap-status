@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap};
+use std::collections::BTreeMap;
 
 use egui::{Color32, TextFormat, Ui};
 
@@ -6,18 +6,10 @@ use crate::github::pulls::PullRequest;
 use crate::github::runs::WorkflowRun;
 use crate::github::runs::WorkflowRuns;
 
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(Default, serde::Deserialize, serde::Serialize)]
 #[serde(default)]
 pub struct Table {
     striped: bool,
-}
-
-impl Default for Table {
-    fn default() -> Self {
-        Self {
-            striped: false,
-        }
-    }
 }
 
 impl Table {
@@ -39,7 +31,7 @@ impl Table {
             header.col(|ui| { ui.strong("Author"); });
         })
             .body(|mut body| {
-                for (name, prs) in pulls.into_iter() {
+                for (name, prs) in pulls.iter() {
                     if !prs.is_empty() {
                         body.row(40.0, |mut row| {
                             row.col(|ui| { ui.heading(""); });
@@ -49,7 +41,7 @@ impl Table {
                         });
                     }
 
-                    prs.into_iter().for_each(|pr| {
+                    prs.iter().for_each(|pr| {
                         let _pr = pr.clone();
                         body.row(18.0, |mut row| {
                             row.col(|ui| { ui.label(format!("{}", &_pr.number)); });
@@ -89,67 +81,40 @@ impl Table {
             header.col(|ui| { ui.strong("Attempts"); });
             header.col(|ui| { ui.strong("Timestamp"); });
         }).body(|mut body| {
-            for (repo_name, runs) in repo_with_runs.into_iter() {
+            for (repo_name, runs) in repo_with_runs.iter() {
                 // Group workflow runs by id
                 let group_by_workflow_id = runs.workflow_runs.clone().into_iter().fold(BTreeMap::new(), |mut acc: BTreeMap<i64, Vec<WorkflowRun>>, wr| {
                     acc.entry(wr.workflow_id).or_default().push(wr);
                     acc
                 });
 
-                // Check if repo has any failures among their last workflow runs
-                // let has_failed_conclusion = group_by_workflow_id.clone().into_iter()
-                //     .any(|(_, workflow_runs)| {
-                //         let run = workflow_runs.into_iter()
-                //             .take(1)
-                //             .find(|workflow_run| {
-                //                 let run = workflow_run.clone();
-                //                 let conclusion = &run.conclusion.unwrap_or(String::new());
-                //                 conclusion == &String::from("failure")
-                //             });
-                //         run.is_some()
-                //     });
-                //
-                // println!("repo: {} has failures: {}", &repo_name, &has_failed_conclusion);
+                group_by_workflow_id.into_iter().for_each(|(_, workflow_runs)| {
+                    workflow_runs.into_iter().take(1).for_each(|workflow_run| {
+                        let conclusion = &workflow_run.conclusion.unwrap_or(String::new());
 
-                // if has_failed_conclusion {
-                    // body.row(40.0, |mut row| {
-                    //     row.col(|ui| { ui.heading(repo_name); });
-                    //     row.col(|ui| { ui.heading(""); });
-                    //     row.col(|ui| { ui.heading(""); });
-                    //     row.col(|ui| { ui.heading(""); });
-                    //     row.col(|ui| { ui.heading(""); });
-                    //     row.col(|ui| { ui.heading(""); });
-                    // });
+                        if conclusion == &String::from("failure") {
+                            body.row(18.0, |mut row| {
+                                row.col(|ui| { ui.label(repo_name); });
+                                row.col(|ui| { ui.label(&workflow_run.name.unwrap_or(String::new())); });
+                                row.col(|ui| { ui.label(&workflow_run.event); });
+                                row.col(|ui| { ui.label(&workflow_run.status.unwrap_or(String::new())); });
 
-                    group_by_workflow_id.into_iter().for_each(|(_, workflow_runs)| {
-                        workflow_runs.into_iter().take(1).for_each(|workflow_run| {
-                            let run = workflow_run.clone();
-                            let conclusion = &run.conclusion.unwrap_or(String::new());
-
-                            if conclusion == &String::from("failure") {
-                                body.row(18.0, |mut row| {
-                                    row.col(|ui| { ui.label(repo_name); });
-                                    row.col(|ui| { ui.label(&run.name.unwrap_or(String::new())); });
-                                    row.col(|ui| { ui.label(&run.event); });
-                                    row.col(|ui| { ui.label(&run.status.unwrap_or(String::new())); });
-
-                                    row.col(|ui| {
-                                        use egui::text::LayoutJob;
-                                        let green = TextFormat { color: Color32::from_rgb(100, 255, 146), ..Default::default() };
-                                        let red = TextFormat { color: Color32::from_rgb(255, 100, 100), ..Default::default() };
-                                        let mut job = LayoutJob::default();
-                                        let color = if conclusion == "success" { green } else { red };
-                                        job.append(conclusion, 0.0, color);
-                                        ui.label(job);
-                                    });
-
-                                    row.col(|ui| { ui.label(format!("{}", &run.run_attempt)); });
-                                    row.col(|ui| { ui.label(&run.run_started_at.unwrap_or(String::new())); });
+                                row.col(|ui| {
+                                    use egui::text::LayoutJob;
+                                    let green = TextFormat { color: Color32::from_rgb(100, 255, 146), ..Default::default() };
+                                    let red = TextFormat { color: Color32::from_rgb(255, 100, 100), ..Default::default() };
+                                    let mut job = LayoutJob::default();
+                                    let color = if conclusion == "success" { green } else { red };
+                                    job.append(conclusion, 0.0, color);
+                                    ui.label(job);
                                 });
-                            }
 
-                        });
+                                row.col(|ui| { ui.label(format!("{}", &workflow_run.run_attempt)); });
+                                row.col(|ui| { ui.label(&workflow_run.run_started_at.unwrap_or(String::new())); });
+                            });
+                        }
                     });
+                });
                 // }
             };
         })

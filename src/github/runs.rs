@@ -7,7 +7,7 @@ impl Runs for GitHubApi {
     fn runs(
         &self,
         token: &mut String,
-        repo: &String,
+        repo: &str,
         callback: impl 'static + Send + FnOnce(WorkflowRuns),
     ) {
         let url = format!("https://api.github.com/repos/navikt/{}/actions/runs", repo);
@@ -16,7 +16,7 @@ impl Runs for GitHubApi {
             headers: ehttp::headers(&[
                 ("Accept", "application/vnd.github+json"),
                 ("User-Agent", "rust web-api-client demo"),
-                ("Authorization", format!("Bearer {}", token.trim().to_string()).as_str()),
+                ("Authorization", format!("Bearer {}", token.trim()).as_str()),
             ]),
             ..ehttp::Request::get(&url)
         };
@@ -35,19 +35,10 @@ impl Runs for GitHubApi {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct WorkflowRuns {
     pub total_count: i32,
     pub workflow_runs: Vec<WorkflowRun>,
-}
-
-impl Default for WorkflowRuns {
-    fn default() -> Self {
-        Self {
-            total_count: 0,
-            workflow_runs: vec![],
-        }
-    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

@@ -7,14 +7,14 @@ use serde::{Deserialize, Serialize};
 use crate::github::github_client::{GitHubApi, Teams};
 
 impl Teams for GitHubApi {
-    fn teams(&self, url: &String, token: &String) -> Promise<HashSet<Team>> {
+    fn teams(&self, url: &str, token: &str) -> Promise<HashSet<Team>> {
         println!("Fetching: {}", &url);
 
         let request = ehttp::Request {
             headers: ehttp::headers(&[
                 ("Accept", "application/vnd.github+json"),
                 ("User-Agent", "Rust-wasm-App"),
-                ("Authorization", format!("Bearer {}", token.trim().to_string()).as_str()),
+                ("Authorization", format!("Bearer {}", token.trim()).as_str()),
             ]),
             ..ehttp::Request::get(url)
         };
