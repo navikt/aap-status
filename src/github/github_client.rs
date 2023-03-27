@@ -24,14 +24,7 @@ pub trait Repositories {
     fn repositories(
         &self,
         token: &mut String,
-        team_name: &str,
-        callback: impl 'static + Send + FnOnce(HashSet<Repo>),
-    );
-
-    fn repos(
-        &self,
-        url: &str,
-        token: &str,
+        team: &Team,
     ) -> Promise<HashSet<Repo>>;
 }
 
@@ -54,6 +47,7 @@ pub trait Workflows {
 }
 
 pub trait Teams {
+    fn team(&self, name: &str, token: &str) -> Promise<Option<Team>>;
     fn teams(
         &self,
         url: &str,

@@ -22,7 +22,8 @@ impl eframe::App for TemplateApp {
             pr_table,
             run_table,
             state,
-            team,
+            team_name,
+            team: _,
             github,
             pulls: _,
             workflows: _,
@@ -65,36 +66,6 @@ impl eframe::App for TemplateApp {
             }
 
             ui.separator();
-            ui.label("Fetch data from GitHub");
-
-            if ui.button("Refresh").clicked() {
-                match state {
-                    State::Pulls => {
-                        let _repos = self.repos.clone();
-                        for repo in _repos.lock().unwrap().clone().into_iter() {
-                            let _pulls = self.pulls.clone();
-                            github.pull_requests(token, &repo.clone().name, move |response: Vec<PullRequest>| {
-                                *_pulls.lock().unwrap().entry(repo.name).or_default() = response;
-                            });
-                        }
-                    }
-                    State::Runs => {
-                        let _repos = self.repos.clone();
-                        for repo in _repos.lock().unwrap().clone().into_iter() {
-                            let _runs = self.runs.clone();
-                            github.runs(token, &repo.clone().name, move |response: WorkflowRuns| {
-                                *_runs.lock().unwrap().entry(repo.name).or_insert(WorkflowRuns::default()) = response;
-                            });
-                        }
-                    }
-                    State::Repositories => {
-                        let _repos = self.repos.clone();
-                        github.repositories(token, &team.clone(), move |response| {
-                            *_repos.lock().unwrap() = response
-                        });
-                    }
-                }
-            }
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -102,6 +73,16 @@ impl eframe::App for TemplateApp {
             match state {
                 State::Pulls => {
                     ui.heading("Pull Requests");
+                    if ui.button("Refresh").clicked() {
+                        let _repos = self.repos.clone();
+                        for repo in _repos.lock().unwrap().clone().into_iter() {
+                            let _pulls = self.pulls.clone();
+                            _pulls.lock().unwrap().clear();
+                            github.pull_requests(token, &repo.clone().name, move |response: Vec<PullRequest>| {
+                                *_pulls.lock().unwrap().entry(repo.name).or_default() = response;
+                            });
+                        }
+                    }
 
                     StripBuilder::new(ui)
                         .size(Size::remainder().at_least(100.0))
@@ -115,6 +96,19 @@ impl eframe::App for TemplateApp {
                 }
                 State::Runs => {
                     ui.heading("Workflow Runs");
+
+                    ui.horizontal_wrapped(|ui| {
+                        if ui.button("Refresh").clicked() {
+                            let _repos = self.repos.clone();
+                            for repo in _repos.lock().unwrap().clone().into_iter() {
+                                let _runs = self.runs.clone();
+                                _runs.lock().unwrap().clear();
+                                github.runs(token, &repo.clone().name, move |response: WorkflowRuns| {
+                                    *_runs.lock().unwrap().entry(repo.name).or_insert(WorkflowRuns::default()) = response;
+                                });
+                            }
+                        }
+                    });
 
                     StripBuilder::new(ui)
                         .size(Size::remainder().at_least(100.0))
@@ -132,45 +126,25 @@ impl eframe::App for TemplateApp {
                     ui.heading("Repositories");
 
                     ui.horizontal_wrapped(|ui| {
-                        if ui.text_edit_singleline(team).ctx.input().key_pressed(egui::Key::Enter) {
-                            *team = team.to_string();
+                        if ui.text_edit_singleline(team_name).ctx.input().key_pressed(egui::Key::Enter) {
+                            *team_name = team_name.to_string();
+
+                            let _team = self.team.clone();
+                            if let Some(team) = github.team(team_name, token).block_and_take() { *_team.lock().unwrap() = team };
                         }
 
-                        if ui.button("fetch repos").clicked() {
+                        if ui.button("Fetch").clicked() {
                             let _repos = self.repos.clone();
-                            github.repositories(token, &team.clone(), move |response| {
-                                *_repos.lock().unwrap() = response
-                            });
-                        }
-                    });
+                            let _team = self.team.lock().unwrap().clone();
 
-                    ui.label(format!("Teams in navikt: {}", self.teams.clone().lock().unwrap().len()));
-                    ui.horizontal_wrapped(|ui| {
-                        egui::ComboBox::from_label("")
-                            .selected_text(format!("{:?}", team))
-                            .show_ui(ui, |ui| {
-                                ui.style_mut().wrap = Some(false);
-                                ui.set_min_width(60.0);
-
-                                self.teams.lock().unwrap().clone().into_iter().for_each(|fetched_team| {
-                                    ui.selectable_value(team, fetched_team.name.clone(), fetched_team.name);
-                                });
-                            });
-                        if ui.button("fetch teams from github/navikt").clicked() {
-                            let base_url = String::from("https://api.github.com/orgs/navikt/teams?per_page=100&page=");
-
-                            for i in 1..=3 {
-                                let url = format!("{}{}", base_url, i);
-                                let teams = self.teams.clone();
-                                let teams_to_add = github.teams(&url, token).block_and_take();
-                                teams.lock().unwrap().extend(teams_to_add.into_iter());
-                            }
+                            let repositories = github.repositories(token, &_team).block_and_take();
+                            *_repos.lock().unwrap() = repositories;
                         }
                     });
 
                     ui.separator();
 
-                    ui.label(format!("Repositories in your selected team {}: {}", team, self.repos.clone().lock().unwrap().len()));
+                    ui.label(format!("Repositories in your selected team {}: {}", team_name, self.repos.clone().lock().unwrap().len()));
                     let _repos = self.repos.lock().unwrap().clone();
 
                     _repos.into_iter().for_each(|repo| {
@@ -208,7 +182,8 @@ impl Default for TemplateApp {
             pr_table: Table::default(),
             run_table: Table::default(),
             state: State::Repositories,
-            team: String::from("aap"),
+            team_name: String::from("aap"),
+            team: Arc::new(Mutex::new(Team::default())),
             github: GitHubApi::default(),
             pulls: Arc::new(Mutex::new(BTreeMap::new())),
             workflows: Arc::new(Mutex::new(BTreeMap::new())),
@@ -252,7 +227,9 @@ pub struct TemplateApp {
     pr_table: Table,
     run_table: Table,
     state: State,
-    team: String,
+
+    team_name: String,
+    team: Arc<Mutex<Team>>,
 
     #[serde(skip)]
     github: GitHubApi,

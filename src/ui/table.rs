@@ -19,7 +19,7 @@ impl Table {
         let table = TableBuilder::new(ui)
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
             .column(Column::auto())
-            .column(Column::auto().resizable(true).clip(true))
+            .column(Column::auto())
             .column(Column::auto())
             .column(Column::auto())
             .min_scrolled_height(0.0);
