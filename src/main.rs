@@ -13,7 +13,7 @@ fn main() {
         "AAP Status",
         native_options,
         Box::new(|cc| Box::new(TemplateApp::new(cc))),
-    );
+    ).expect("Failed to start native");
 }
 
 // when compiling to web using trunk.
