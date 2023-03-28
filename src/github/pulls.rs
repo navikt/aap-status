@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
-use ehttp::Request;
+use std::sync::{Arc, Mutex};
 
+use ehttp::Request;
 use poll_promise::Promise;
 use serde::{Deserialize, Serialize};
 

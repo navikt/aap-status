@@ -5,7 +5,7 @@ use eframe::epaint::Color32;
 use eframe::epaint::text::TextFormat;
 use poll_promise::Promise;
 
-use crate::github::github_client::{GitHubApi, Pulls, Repositories, Runs, Teams};
+use crate::github::github_client::{Fetcher, GitHubApi, Pulls, Repositories, Runs, Teams};
 use crate::github::pulls::PullRequest;
 use crate::github::repositories::Repo;
 use crate::github::runs::WorkflowRun;
@@ -70,11 +70,6 @@ impl eframe::App for TemplateApp {
                             let (_, default_promise) = Promise::new();
                             *_pulls.lock().unwrap().entry(_repo.name.clone()).or_insert(default_promise) = promise;
                         });
-
-                        // for repo in _repos.lock().unwrap().clone().into_iter() {
-                        //     let prs = github.pull_requests(token, &repo.clone().name).block_and_take();
-                        //     *_pulls.lock().unwrap().entry(repo.name).or_default() = prs;
-                        // }
                     }
 
                     StripBuilder::new(ui)
@@ -123,11 +118,21 @@ impl eframe::App for TemplateApp {
                             if let Some(team) = github.team(team_name, token).block_and_take() { *_team.lock().unwrap() = team };
                         }
 
-                        if ui.button("Fetch").clicked() {
+                        if ui.button("Fetch async").clicked() {
                             let _repos = self.repos.clone();
                             let _team = self.team.lock().unwrap().clone();
                             let repositories = github.repositories(token, &_team).block_and_take();
                             *_repos.lock().unwrap() = repositories;
+                        }
+
+                        if ui.button("Fetch callbacking").clicked() {
+                            let _repos = self.repos.clone();
+                            let _team = self.team.lock().unwrap().clone();
+                            github.fetch(token, format!("{}{}", &_team.repositories_url, "?per_page=100").as_str(), move |response| {
+                                if let Ok(repos) = serde_json::from_slice::<HashSet<Repo>>(&response) {
+                                    *_repos.lock().unwrap() = repos;
+                                }
+                            });
                         }
                     });
 
