@@ -1,49 +1,53 @@
+use std::collections::HashSet;
+use std::hash::{Hash, Hasher};
+
+use poll_promise::Promise;
 use serde::{Deserialize, Serialize};
 
 use crate::github::github_client::{GitHubApi, Runs};
 use crate::github::pulls::PullRequest;
 
 impl Runs for GitHubApi {
-    fn runs(
-        &self,
-        token: &mut String,
-        repo: &str,
-        callback: impl 'static + Send + FnOnce(WorkflowRuns),
-    ) {
-        let url = format!("https://api.github.com/repos/navikt/{}/actions/runs", repo);
-
+    fn runs(&self, token: &mut String, repo: &str) -> Promise<HashSet<WorkflowRun>> {
         let request = ehttp::Request {
             headers: ehttp::headers(&[
                 ("Accept", "application/vnd.github+json"),
                 ("User-Agent", "rust web-api-client demo"),
                 ("Authorization", format!("Bearer {}", token.trim()).as_str()),
             ]),
-            ..ehttp::Request::get(&url)
+            ..ehttp::Request::get(format!("https://api.github.com/repos/navikt/{}/actions/runs?status=failure&per_page=10", repo))
         };
 
-        ehttp::fetch(request, move |result: ehttp::Result<ehttp::Response>| {
-            match result {
+        let (sender, promise) = Promise::new();
+
+        ehttp::fetch(request, move |response| {
+            match response {
                 Ok(res) => {
-                    match serde_json::from_slice(&res.bytes) {
-                        Ok(runs) => callback(runs),
-                        Err(e) => println!("error: {:?} when parsing runs with content {:?}", e, res)
+                    match serde_json::from_slice::<WorkflowRuns>(&res.bytes) {
+                        Ok(runs) => sender.send(runs.workflow_runs),
+                        Err(_) => sender.send(HashSet::new()),
                     }
                 }
-                Err(e) => println!("Error {:?} from {:?}", e, &url)
-            }
+                Err(e) => {
+                    println!("Failed to fetch: {}", e);
+                    sender.send(HashSet::new());
+                }
+            };
         });
+
+        promise
     }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct WorkflowRuns {
     pub total_count: i32,
-    pub workflow_runs: Vec<WorkflowRun>,
+    pub workflow_runs: HashSet<WorkflowRun>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct WorkflowRun {
-    id: i64,
+    pub id: i64,
     pub name: Option<String>,
     check_suite_id: Option<i64>,
     check_suite_node_id: Option<String>,
@@ -52,12 +56,12 @@ pub struct WorkflowRun {
     run_number: i32,
     pub run_attempt: i32,
     pub event: String,
-    pub status: Option<String>,
+    status: Option<String>,
     pub conclusion: Option<String>,
     pub workflow_id: i64,
     url: String,
-    html_url: String,
-    pull_requests: Vec<PullRequest>,
+    pub html_url: String,
+    pull_requests: HashSet<PullRequest>,
     created_at: String,
     updated_at: String,
     actor: Option<Actor>,
@@ -73,7 +77,11 @@ pub struct WorkflowRun {
     display_title: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+impl Hash for WorkflowRun {
+    fn hash<H: Hasher>(&self, state: &mut H) { self.id.hash(state) }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Actor {
     name: Option<String>,
     email: Option<String>,

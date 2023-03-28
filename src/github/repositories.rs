@@ -7,12 +7,7 @@ use crate::github::github_client::{GitHubApi, Repositories};
 use crate::github::teams::Team;
 
 impl Repositories for GitHubApi {
-    fn repositories(
-        &self,
-        token: &mut String,
-        team: &Team,
-    ) -> Promise<HashSet<Repo>> {
-
+    fn repositories(&self, token: &mut String, team: &Team) -> Promise<HashSet<Repo>> {
         let paginated_url = format!("{}{}", &team.repositories_url, "?per_page=100");
         println!("forsøker å hente {}", &paginated_url);
 
@@ -28,7 +23,6 @@ impl Repositories for GitHubApi {
         let (sender, promise) = Promise::new();
 
         ehttp::fetch(request, move |response| {
-            println!("response: {:?}", &response);
             match response {
                 Ok(res) => {
                     match serde_json::from_slice::<HashSet<Repo>>(&res.bytes) {

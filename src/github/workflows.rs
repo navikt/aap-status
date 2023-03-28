@@ -1,15 +1,13 @@
+use std::collections::HashSet;
+use std::hash::{Hash, Hasher};
+
+use poll_promise::Promise;
 use serde::{Deserialize, Serialize};
 
 use crate::github::github_client::{GitHubApi, Workflows};
 
 impl Workflows for GitHubApi {
-    fn workflows(
-        &self,
-        token: &mut String,
-        repo: &str,
-        callback: impl 'static + Send + FnOnce(Vec<Workflow>),
-    ) {
-        let url = format!("https://api.github.com/repos/navikt/{}/actions/workflows", repo);
+    fn workflows(&self, token: &mut String, repo: &str) -> Promise<HashSet<Workflow>> {
 
         let request = ehttp::Request {
             headers: ehttp::headers(&[
@@ -17,34 +15,48 @@ impl Workflows for GitHubApi {
                 ("User-Agent", "rust web-api-client demo"),
                 ("Authorization", format!("Bearer {}", token.trim()).as_str()),
             ]),
-            ..ehttp::Request::get(&url)
+            ..ehttp::Request::get(format!("https://api.github.com/repos/navikt/{}/actions/workflows", repo))
         };
 
-        ehttp::fetch(request, move |result: ehttp::Result<ehttp::Response>| {
-            match result {
+        let (sender, promise) = Promise::new();
+
+        ehttp::fetch(request, move |response| {
+            match response {
                 Ok(res) => {
                     match serde_json::from_slice::<WorkflowsResponse>(&res.bytes) {
-                        Ok(workflows) => callback(workflows.workflows),
-                        Err(e) => println!("error: {:?} when parsing runs with content {:?}", e, res)
+                        Ok(workflows) => sender.send(workflows.workflows),
+                        Err(e) => {
+                            println!("Failed to parse from slice: {:?}", e);
+                            sender.send(HashSet::new());
+                        }
                     }
                 }
-                Err(e) => println!("Error {:?} from {:?}", e, &url)
-            }
+                Err(e) => {
+                    println!("Failed to fetch: {}", e);
+                    sender.send(HashSet::new());
+                }
+            };
         });
+
+        promise
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 struct WorkflowsResponse {
     pub total_count: i32,
-    pub workflows: Vec<Workflow>,
+    pub workflows: HashSet<Workflow>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
 pub struct Workflow {
     pub id: i64,
     pub node_id: String,
     pub name: String,
     pub path: String,
     pub state: String,
+}
+
+impl Hash for Workflow {
+    fn hash<H: Hasher>(&self, state: &mut H) { self.id.hash(state) }
 }

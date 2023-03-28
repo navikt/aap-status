@@ -3,11 +3,12 @@ use std::sync::{Arc, Mutex};
 
 use eframe::epaint::Color32;
 use eframe::epaint::text::TextFormat;
+use poll_promise::Promise;
 
 use crate::github::github_client::{GitHubApi, Pulls, Repositories, Runs, Teams};
 use crate::github::pulls::PullRequest;
 use crate::github::repositories::Repo;
-use crate::github::runs::WorkflowRuns;
+use crate::github::runs::WorkflowRun;
 use crate::github::teams::Team;
 use crate::github::workflows::Workflow;
 use crate::ui::table::Table;
@@ -45,26 +46,12 @@ impl eframe::App for TemplateApp {
 
         egui::SidePanel::left("side_panel").show(ctx, |ui| {
             ui.heading("GitHub Status");
-
             ui.separator();
-            ui.label("Overview of pull requests");
-
-            if ui.button("Pull Requests").clicked() {
-                *state = State::Pulls
-            }
-
+            if ui.button("Pull Requests").clicked() { *state = State::Pulls }
             ui.separator();
-            ui.label("Latest runs in GitHub Actions");
-
-            if ui.button("Workflows").clicked() {
-                *state = State::Runs
-            }
-
+            if ui.button("Workflows").clicked() { *state = State::Runs }
             ui.separator();
-            if ui.button("Repositories").clicked() {
-                *state = State::Repositories
-            }
-
+            if ui.button("Repositories").clicked() { *state = State::Repositories }
             ui.separator();
         });
 
@@ -74,14 +61,20 @@ impl eframe::App for TemplateApp {
                 State::Pulls => {
                     ui.heading("Pull Requests");
                     if ui.button("Refresh").clicked() {
+                        self.pulls.lock().unwrap().clear();
+                        let _pulls = self.pulls.clone();
                         let _repos = self.repos.clone();
-                        for repo in _repos.lock().unwrap().clone().into_iter() {
-                            let _pulls = self.pulls.clone();
-                            _pulls.lock().unwrap().clear();
-                            github.pull_requests(token, &repo.clone().name, move |response: Vec<PullRequest>| {
-                                *_pulls.lock().unwrap().entry(repo.name).or_default() = response;
-                            });
-                        }
+
+                        _repos.lock().unwrap().clone().iter().for_each(|_repo|{
+                            let promise = github.pull_requests(token, &_repo.clone().name);
+                            let (_, default_promise) = Promise::new();
+                            *_pulls.lock().unwrap().entry(_repo.name.clone()).or_insert(default_promise) = promise;
+                        });
+
+                        // for repo in _repos.lock().unwrap().clone().into_iter() {
+                        //     let prs = github.pull_requests(token, &repo.clone().name).block_and_take();
+                        //     *_pulls.lock().unwrap().entry(repo.name).or_default() = prs;
+                        // }
                     }
 
                     StripBuilder::new(ui)
@@ -89,24 +82,24 @@ impl eframe::App for TemplateApp {
                         .vertical(|mut strip| {
                             strip.cell(|ui| {
                                 egui::ScrollArea::horizontal().show(ui, |ui| {
-                                    pr_table.pull_requests_ui(ui, &self.pulls.lock().unwrap().clone())
+                                    pr_table.pull_requests_ui(ui, &self.pulls.lock().unwrap())
                                 });
                             });
                         });
                 }
                 State::Runs => {
-                    ui.heading("Workflow Runs");
-
+                    ui.heading("Failed Workflows");
                     ui.horizontal_wrapped(|ui| {
                         if ui.button("Refresh").clicked() {
+                            self.runs.lock().unwrap().clear();
+                            let _runs = self.runs.clone();
                             let _repos = self.repos.clone();
-                            for repo in _repos.lock().unwrap().clone().into_iter() {
-                                let _runs = self.runs.clone();
-                                _runs.lock().unwrap().clear();
-                                github.runs(token, &repo.clone().name, move |response: WorkflowRuns| {
-                                    *_runs.lock().unwrap().entry(repo.name).or_insert(WorkflowRuns::default()) = response;
-                                });
-                            }
+
+                            _repos.lock().unwrap().clone().iter().for_each(|_repo| {
+                                let promise = github.runs(token, &_repo.clone().name);
+                                let (_, default_promise) = Promise::new();
+                                *_runs.lock().unwrap().entry(_repo.name.clone()).or_insert(default_promise) = promise;
+                            });
                         }
                     });
 
@@ -115,8 +108,7 @@ impl eframe::App for TemplateApp {
                         .vertical(|mut strip| {
                             strip.cell(|ui| {
                                 egui::ScrollArea::horizontal().show(ui, |ui| {
-                                    let _runs = &self.runs.lock().unwrap().clone();
-                                    let _workflows = &self.workflows.lock().unwrap().clone();
+                                    let _runs = &self.runs.lock().unwrap();
                                     run_table.workflow_runs_ui(ui, _runs)
                                 });
                             });
@@ -124,11 +116,9 @@ impl eframe::App for TemplateApp {
                 }
                 State::Repositories => {
                     ui.heading("Repositories");
-
                     ui.horizontal_wrapped(|ui| {
-                        if ui.text_edit_singleline(team_name).ctx.input().key_pressed(egui::Key::Enter) {
+                        if ui.text_edit_singleline(team_name).lost_focus() {
                             *team_name = team_name.to_string();
-
                             let _team = self.team.clone();
                             if let Some(team) = github.team(team_name, token).block_and_take() { *_team.lock().unwrap() = team };
                         }
@@ -136,7 +126,6 @@ impl eframe::App for TemplateApp {
                         if ui.button("Fetch").clicked() {
                             let _repos = self.repos.clone();
                             let _team = self.team.lock().unwrap().clone();
-
                             let repositories = github.repositories(token, &_team).block_and_take();
                             *_repos.lock().unwrap() = repositories;
                         }
@@ -234,14 +223,14 @@ pub struct TemplateApp {
     #[serde(skip)]
     github: GitHubApi,
 
-    // #[serde(skip)]
-    pulls: Arc<Mutex<BTreeMap<String, Vec<PullRequest>>>>,
+    #[serde(skip)]
+    pulls: Arc<Mutex<BTreeMap<String, Promise<HashSet<PullRequest>>>>>,
 
     // #[serde(skip)]
-    workflows: Arc<Mutex<BTreeMap<String, Vec<Workflow>>>>,
+    workflows: Arc<Mutex<BTreeMap<String, HashSet<Workflow>>>>,
 
-    // #[serde(skip)]
-    runs: Arc<Mutex<BTreeMap<String, WorkflowRuns>>>,
+    #[serde(skip)]
+    runs: Arc<Mutex<BTreeMap<String, Promise<HashSet<WorkflowRun>>>>>,
 
     // #[serde(skip)]
     repos: Arc<Mutex<HashSet<Repo>>>,

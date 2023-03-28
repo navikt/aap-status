@@ -1,41 +1,43 @@
+use std::collections::HashSet;
+use std::hash::{Hash, Hasher};
+use ehttp::Request;
+
+use poll_promise::Promise;
 use serde::{Deserialize, Serialize};
 
 use crate::github::github_client::{GitHubApi, Pulls};
 
 impl Pulls for GitHubApi {
-    fn pull_requests(
-        &self, token:
-        &mut String,
-        repo: &str,
-        callback: impl 'static + Send + FnOnce(Vec<PullRequest>),
-    ) {
-        let url = format!("https://api.github.com/repos/navikt/{}/pulls", repo);
-
-        let request = ehttp::Request {
+    fn pull_requests(&self, token: &mut String, repo: &str) -> Promise<HashSet<PullRequest>> {
+        let (sender, promise) = Promise::new();
+        let request = Request {
             headers: ehttp::headers(&[
                 ("Accept", "application/vnd.github+json"),
                 ("User-Agent", "rust web-api-client demo"),
                 ("Authorization", format!("Bearer {}", token.trim()).as_str()),
             ]),
-            ..ehttp::Request::get(&url)
+            ..Request::get(format!("https://api.github.com/repos/navikt/{}/pulls", repo))
         };
 
-        ehttp::fetch(request, move |result: ehttp::Result<ehttp::Response>| {
-            match result {
+        ehttp::fetch(request, move |response| {
+            match response {
                 Ok(res) => {
-                    match serde_json::from_slice::<DataOrEmpty<Vec<PullRequest>>>(&res.bytes) {
-                        Ok(pulls) => {
-                            match pulls {
-                                DataOrEmpty::Data(prs) => callback(prs),
-                                DataOrEmpty::Empty {} => callback(Vec::<PullRequest>::default()),
-                            };
+                    match serde_json::from_slice::<HashSet<PullRequest>>(&res.bytes) {
+                        Ok(value) => sender.send(value),
+                        Err(e) => {
+                            println!("Failed to parse from slice: {:?}", e);
+                            sender.send(HashSet::default());
                         }
-                        Err(e) => println!("error: {:?} when parsing pulls with content {:?}", e, res)
                     }
                 }
-                Err(e) => println!("Error {:?} from {:?}", e, &url)
-            }
+                Err(e) => {
+                    println!("Failed to fetch: {}", e);
+                    sender.send(HashSet::default());
+                }
+            };
         });
+
+        promise
     }
 }
 
@@ -46,15 +48,15 @@ enum DataOrEmpty<T> {
     Empty {},
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct PullsResponse {
-    pub pull_requests: Vec<PullRequest>,
+    pub pull_requests: HashSet<PullRequest>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
 pub struct PullRequest {
     id: i32,
-    pub number: i32,
+    number: i32,
     url: String,
     head: Head,
     base: Base,
@@ -67,12 +69,16 @@ pub struct PullRequest {
     pub updated_at: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+impl Hash for PullRequest {
+    fn hash<H: Hasher>(&self, state: &mut H) { self.id.hash(state) }
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct User {
     pub login: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Base {
     #[serde(rename = "ref")]
     _ref: String,
@@ -80,7 +86,7 @@ pub struct Base {
     repo: Repo,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Head {
     #[serde(rename = "ref")]
     _ref: String,
@@ -88,7 +94,7 @@ pub struct Head {
     repo: Repo,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Repo {
     id: i64,
     url: String,
