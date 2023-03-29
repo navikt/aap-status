@@ -22,11 +22,11 @@ eframe = { version = "0.21.3", default-features = false, features = [
 
 poll-promise = { version = "0.2.0", default-features = false , features = ["web"]}
 itertools = "0.10.5"
+tracing = "0.1.37"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tracing-subscriber = "0.3.16"
-tracing = "0.1.37"
 
 # web:
 [target.'cfg(target_arch = "wasm32")'.dependencies]

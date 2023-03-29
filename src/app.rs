@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use eframe::epaint::{Color32, FontId};
 use egui::ScrollArea;
 
-use crate::github::github_client::{Fetcher, GitHubApi, Pulls, Repositories, Teams, Workflows};
+use crate::github::github_client::{Fetcher, GitHubApi, Pulls, Repositories, Workflows};
 use crate::github::pulls::PullRequest;
 use crate::github::repositories::Repo;
 use crate::github::teams::Team;
@@ -35,7 +35,7 @@ impl eframe::App for TemplateApp {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.label("Personal Access Token:");
-                ui.add(egui::TextEdit::singleline(token).password(*show_token));
+                ui.add(egui::TextEdit::singleline(token).password(!*show_token));
 
                 if ui.add(egui::SelectableLabel::new(*show_token, "👁"))
                     .on_hover_text("Show/hide token")
@@ -117,7 +117,7 @@ impl eframe::App for TemplateApp {
                             tracing::info!("selected {:?}", &team_name);
                             *team_name = team_name.to_string();
                             let _team = self.team.clone();
-                            github.fetch(token, &*format!("https://api.github.com/orgs/navikt/teams/{}", &team_name), move |response | {
+                            github.fetch(token, &format!("https://api.github.com/orgs/navikt/teams/{}", &team_name), move |response| {
                                 if let Ok(team) = serde_json::from_slice::<Team>(&response) {
                                     *_team.lock().unwrap() = team;
                                 }

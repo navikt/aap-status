@@ -17,7 +17,6 @@ impl Table {
     pub fn pull_requests_ui(&mut self, ui: &mut Ui, pull_requests: &BTreeMap<String, HashSet<PullRequest>>) {
         ui.push_id(hash("pull_request"), |ui|{
 
-
         let table = TableBuilder::new(ui)
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
             .column(Column::auto())
