@@ -116,9 +116,15 @@ impl eframe::App for TemplateApp {
                         if ui.text_edit_singleline(team_name).lost_focus() {
                             tracing::info!("selected {:?}", &team_name);
                             *team_name = team_name.to_string();
-                            if let Some(team) = github.team(&team_name, token).block_and_take() {
-                                *self.team.lock().unwrap() = team;
-                            }
+                            let _team = self.team.clone();
+                            github.fetch(token, &*format!("https://api.github.com/orgs/navikt/teams/{}", &team_name), move |response | {
+                                if let Ok(team) = serde_json::from_slice::<Team>(&response) {
+                                    *_team.lock().unwrap() = team;
+                                }
+                            });
+                            // if let Some(team) = github.team(&team_name, token).block_and_take() {
+                            //     *self.team.lock().unwrap() = team;
+                            // }
                         }
 
                         if ui.button("Fetch async").clicked() {
