@@ -15,6 +15,7 @@ dependencies = [
  "poll-promise",
  "serde",
  "serde_json",
+ "tracing",
  "tracing-subscriber",
  "tracing-wasm",
  "wasm-bindgen",

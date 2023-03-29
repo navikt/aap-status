@@ -1,14 +1,12 @@
-use std::collections::{BTreeMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::collections::HashSet;
 
-use ehttp::{Request, Response};
+use ehttp::Request;
 use poll_promise::Promise;
 
 use crate::github::pulls::PullRequest;
 use crate::github::repositories::Repo;
-use crate::github::runs::WorkflowRun;
 use crate::github::teams::Team;
-use crate::github::workflows::Workflow;
+use crate::github::workflows::{Workflow, WorkflowRun};
 
 #[derive(Default)]
 pub struct GitHubApi {}
@@ -25,17 +23,13 @@ pub trait Repositories {
     fn repositories(&self, token: &mut String, team: &Team) -> Promise<HashSet<Repo>>;
 }
 
-pub trait Runs {
-    fn runs(&self, token: &mut String, repo: &str) -> Promise<HashSet<WorkflowRun>>;
-}
-
 pub trait Workflows {
     fn workflows(&self, token: &mut String, repo: &str) -> Promise<HashSet<Workflow>>;
+    fn workflow_runs(&self, token: &mut String, repo: &str) -> Promise<HashSet<WorkflowRun>>;
 }
 
 pub trait Teams {
     fn team(&self, name: &str, token: &str) -> Promise<Option<Team>>;
-    fn teams(&self, url: &str, token: &str) -> Promise<HashSet<Team>>;
 }
 
 impl Fetcher for GitHubApi {

@@ -1,10 +1,9 @@
 use std::collections::{BTreeMap, HashSet};
 
 use egui::{Color32, TextFormat, Ui};
-use poll_promise::Promise;
 
 use crate::github::pulls::PullRequest;
-use crate::github::runs::WorkflowRun;
+use crate::github::workflows::WorkflowRun;
 
 #[derive(Default, serde::Deserialize, serde::Serialize)]
 #[serde(default)]
@@ -13,7 +12,7 @@ pub struct Table {
 }
 
 impl Table {
-    pub fn pull_requests_ui(&mut self, ui: &mut Ui, pulls: &BTreeMap<String, Promise<HashSet<PullRequest>>>) {
+    pub fn pull_requests_ui(&mut self, ui: &mut Ui, pull_requests: &BTreeMap<String, HashSet<PullRequest>>) {
         use egui_extras::{Column, TableBuilder};
 
         let table = TableBuilder::new(ui)
@@ -31,17 +30,15 @@ impl Table {
             header.col(|ui| { ui.strong("Last Update"); });
         })
             .body(|mut body| {
-                for (name, promised_prs) in pulls.iter() {
-                    if let Some(prs) = promised_prs.ready() {
-                        prs.iter().for_each(|pr| {
-                            body.row(18.0, |mut row| {
-                                row.col(|ui| { ui.label(name); });
-                                row.col(|ui| { ui.hyperlink_to(&pr.title.clone().unwrap_or_default(), &pr.html_url.clone().unwrap_or_default()); });
-                                row.col(|ui| { ui.label(&pr.updated_at.clone().unwrap_or_default()); });
-                                row.col(|ui| { ui.label(&pr.user.clone().unwrap_or_default().login); });
-                            });
+                for (name, prs) in pull_requests.iter() {
+                    prs.iter().for_each(|pr| {
+                        body.row(18.0, |mut row| {
+                            row.col(|ui| { ui.label(name); });
+                            row.col(|ui| { ui.hyperlink_to(&pr.title.clone().unwrap_or_default(), &pr.html_url.clone().unwrap_or_default()); });
+                            row.col(|ui| { ui.label(&pr.updated_at.clone().unwrap_or_default()); });
+                            row.col(|ui| { ui.label(&pr.user.clone().unwrap_or_default().login); });
                         });
-                    }
+                    });
                 }
             });
     }
@@ -49,7 +46,7 @@ impl Table {
     pub fn workflow_runs_ui(
         &mut self,
         ui: &mut Ui,
-        map_of_runs: &BTreeMap<String, Promise<HashSet<WorkflowRun>>>,
+        map_of_runs: &BTreeMap<String, HashSet<WorkflowRun>>,
     ) {
         use egui_extras::{Column, TableBuilder};
 
@@ -71,34 +68,32 @@ impl Table {
             header.col(|ui| { ui.strong("Attempts"); });
             header.col(|ui| { ui.strong("Timestamp"); });
         }).body(|mut body| {
-            for (repo_name, promised_runs) in map_of_runs.iter() {
-                if let Some(runs) = promised_runs.ready() {
-                    let workflows_by_id = runs.iter().fold(BTreeMap::new(), |mut acc: BTreeMap<i64, WorkflowRun>, next| {
-                        let existing_or_new = acc.entry(next.workflow_id).or_default();
-                        if next.id > existing_or_new.id { acc.insert(next.workflow_id, next.clone()); }
-                        acc
-                    });
+            for (repo_name, runs) in map_of_runs.iter() {
+                let workflows_by_id = runs.iter().fold(BTreeMap::new(), |mut acc: BTreeMap<i64, WorkflowRun>, next| {
+                    let existing_or_new = acc.entry(next.workflow_id).or_default();
+                    if next.id > existing_or_new.id { acc.insert(next.workflow_id, next.clone()); }
+                    acc
+                });
 
-                    workflows_by_id.iter().for_each(|(_, workflow_run)| {
-                        body.row(18.0, |mut row| {
-                            row.col(|ui| { ui.label(repo_name); });
-                            row.col(|ui| { ui.hyperlink_to(&workflow_run.name.clone().unwrap_or_default(), &workflow_run.html_url.clone()); });
-                            row.col(|ui| { ui.label(&workflow_run.event.clone()); });
+                workflows_by_id.iter().for_each(|(_, workflow_run)| {
+                    body.row(18.0, |mut row| {
+                        row.col(|ui| { ui.label(repo_name); });
+                        row.col(|ui| { ui.hyperlink_to(&workflow_run.name.clone().unwrap_or_default(), &workflow_run.html_url.clone()); });
+                        row.col(|ui| { ui.label(&workflow_run.event.clone()); });
 
-                            row.col(|ui| {
-                                use egui::text::LayoutJob;
-                                // let green = TextFormat { color: Color32::from_rgb(100, 255, 146), ..Default::default() };
-                                let red = TextFormat { color: Color32::from_rgb(255, 100, 100), ..Default::default() };
-                                let mut job = LayoutJob::default();
-                                job.append(workflow_run.conclusion.clone().unwrap_or_default().as_str(), 0.0, red);
-                                ui.label(job);
-                            });
-
-                            row.col(|ui| { ui.label(format!("{}", &workflow_run.run_attempt.clone())); });
-                            row.col(|ui| { ui.label(&workflow_run.run_started_at.clone().unwrap_or_default()); });
+                        row.col(|ui| {
+                            use egui::text::LayoutJob;
+                            // let green = TextFormat { color: Color32::from_rgb(100, 255, 146), ..Default::default() };
+                            let red = TextFormat { color: Color32::from_rgb(255, 100, 100), ..Default::default() };
+                            let mut job = LayoutJob::default();
+                            job.append(workflow_run.conclusion.clone().unwrap_or_default().as_str(), 0.0, red);
+                            ui.label(job);
                         });
+
+                        row.col(|ui| { ui.label(format!("{}", &workflow_run.run_attempt.clone())); });
+                        row.col(|ui| { ui.label(&workflow_run.run_started_at.clone().unwrap_or_default()); });
                     });
-                }
+                });
             }
         });
     }

@@ -1,6 +1,5 @@
 use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
-use std::sync::{Arc, Mutex};
 
 use ehttp::Request;
 use poll_promise::Promise;
@@ -11,13 +10,14 @@ use crate::github::github_client::{GitHubApi, Pulls};
 impl Pulls for GitHubApi {
     fn pull_requests(&self, token: &mut String, repo: &str) -> Promise<HashSet<PullRequest>> {
         let (sender, promise) = Promise::new();
+        let url = format!("https://api.github.com/repos/navikt/{}/pulls", repo);
         let request = Request {
             headers: ehttp::headers(&[
                 ("Accept", "application/vnd.github+json"),
                 ("User-Agent", "rust web-api-client demo"),
                 ("Authorization", format!("Bearer {}", token.trim()).as_str()),
             ]),
-            ..Request::get(format!("https://api.github.com/repos/navikt/{}/pulls", repo))
+            ..Request::get(&url)
         };
 
         ehttp::fetch(request, move |response| {
@@ -26,13 +26,13 @@ impl Pulls for GitHubApi {
                     match serde_json::from_slice::<HashSet<PullRequest>>(&res.bytes) {
                         Ok(value) => sender.send(value),
                         Err(e) => {
-                            println!("Failed to parse from slice: {:?}", e);
+                            tracing::error!{%e, "Failed to deserialize {url}"}
                             sender.send(HashSet::default());
                         }
                     }
                 }
                 Err(e) => {
-                    println!("Failed to fetch: {}", e);
+                    tracing::error!{%e, "Failed to fetch {url}"}
                     sender.send(HashSet::default());
                 }
             };

@@ -8,8 +8,7 @@ use crate::github::teams::Team;
 
 impl Repositories for GitHubApi {
     fn repositories(&self, token: &mut String, team: &Team) -> Promise<HashSet<Repo>> {
-        let paginated_url = format!("{}{}", &team.repositories_url, "?per_page=100");
-        println!("forsøker å hente {}", &paginated_url);
+        let url = format!("{}{}", &team.repositories_url, "?per_page=100");
 
         let request = ehttp::Request {
             headers: ehttp::headers(&[
@@ -17,7 +16,7 @@ impl Repositories for GitHubApi {
                 ("User-Agent", "Rust-wasm-App"),
                 ("Authorization", format!("Bearer {}", token.trim()).as_str()),
             ]),
-            ..ehttp::Request::get(paginated_url)
+            ..ehttp::Request::get(&url)
         };
 
         let (sender, promise) = Promise::new();
@@ -27,11 +26,14 @@ impl Repositories for GitHubApi {
                 Ok(res) => {
                     match serde_json::from_slice::<HashSet<Repo>>(&res.bytes) {
                         Ok(teams) => sender.send(teams),
-                        Err(_) => sender.send(HashSet::new()),
+                        Err(e) => {
+                            tracing::error!{%e, "Failed to deserialize {url}"}
+                            sender.send(HashSet::new())
+                        },
                     }
                 }
                 Err(e) => {
-                    println!("Failed to fetch: {}", e);
+                    tracing::error!{%e, "Failed to fetch {url}"}
                     sender.send(HashSet::new());
                 }
             };
