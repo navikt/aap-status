@@ -19,6 +19,7 @@ impl eframe::App for TemplateApp {
             github,
             token,
             show_token,
+            show_failed_pull_requests,
             pr_table,
             run_table,
             state,
@@ -97,6 +98,10 @@ impl eframe::App for TemplateApp {
                                 *self.workflow_runs.lock().unwrap().entry(_repo.name.clone()).or_insert(HashSet::default()) = runs;
                             });
                         }
+
+                        if ui.add(egui::SelectableLabel::new(*show_failed_pull_requests, "Hide pull-requests"))
+                            // .on_hover_text("Show/hide token")
+                            .clicked() { *show_failed_pull_requests = !*show_failed_pull_requests; };
                     });
 
                     StripBuilder::new(ui)
@@ -105,7 +110,7 @@ impl eframe::App for TemplateApp {
                             strip.cell(|ui| {
                                 ScrollArea::horizontal().show(ui, |ui| {
                                     let _runs = &self.workflow_runs.lock().unwrap();
-                                    run_table.workflow_runs_ui(ui, _runs)
+                                    run_table.workflow_runs_ui(ui, !show_failed_pull_requests.clone(), _runs)
                                 });
                             });
                         });
@@ -224,6 +229,7 @@ impl Default for TemplateApp {
             github: GitHubApi::default(),
             token: String::from("<GitHub PAT>"),
             show_token: false,
+            show_failed_pull_requests: true,
             pr_table: Table::default(),
             run_table: Table::default(),
             state: State::Repositories,
@@ -271,6 +277,7 @@ pub struct TemplateApp {
 
     token: String,
     show_token: bool,
+    show_failed_pull_requests: bool,
     pr_table: Table,
     run_table: Table,
     state: State,
