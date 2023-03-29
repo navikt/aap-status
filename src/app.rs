@@ -2,13 +2,13 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use eframe::epaint::{Color32, FontId};
-use egui::ScrollArea;
+use egui::{ScrollArea, SelectableLabel};
 
-use crate::github::github_client::{Fetcher, GitHubApi, Pulls, Repositories, Workflows};
+use crate::github::github_client::{Fetcher, GitHubApi, Repositories};
 use crate::github::pulls::PullRequest;
 use crate::github::repositories::Repo;
 use crate::github::teams::Team;
-use crate::github::workflows::{Workflow, WorkflowRun};
+use crate::github::workflows::{Workflow, WorkflowRun, WorkflowRuns};
 use crate::ui::table::Table;
 
 impl eframe::App for TemplateApp {
@@ -38,7 +38,7 @@ impl eframe::App for TemplateApp {
                 ui.label("Personal Access Token:");
                 ui.add(egui::TextEdit::singleline(token).password(!*show_token));
 
-                if ui.add(egui::SelectableLabel::new(*show_token, "👁"))
+                if ui.add(SelectableLabel::new(*show_token, "👁"))
                     .on_hover_text("Show/hide token")
                     .clicked() { *show_token = !*show_token; };
             });
@@ -66,12 +66,15 @@ impl eframe::App for TemplateApp {
                     ui.heading("Pull Requests");
                     if ui.button("Refresh").clicked() {
                         self.pull_requests.lock().unwrap().clear();
-                        let _pulls = self.pull_requests.clone();
                         let _repos = self.repositories.clone();
 
-                        _repos.lock().unwrap().clone().iter().for_each(|_repo| {
-                            let prs = github.pull_requests(token, &_repo.clone().name).block_and_take();
-                            *_pulls.lock().unwrap().entry(_repo.name.clone()).or_insert(HashSet::default()) = prs;
+                        _repos.lock().unwrap().clone().into_iter().for_each(|_repo| {
+                            let _pulls = self.pull_requests.clone();
+                            github.fetch(token, &format!("https://api.github.com/repos/navikt/{}/pulls", _repo.name.clone()), move|response| {
+                                if let Ok(pull_requests) = serde_json::from_slice::<HashSet<PullRequest>>(&response) {
+                                    *_pulls.lock().unwrap().entry(_repo.clone().name).or_insert(HashSet::default()) = pull_requests;
+                                }
+                            });
                         });
                     }
 
@@ -93,15 +96,19 @@ impl eframe::App for TemplateApp {
                             self.workflow_runs.lock().unwrap().clear();
                             let _repos = self.repositories.clone();
 
-                            _repos.lock().unwrap().clone().iter().for_each(|_repo| {
-                                let runs = github.workflow_runs(token, &_repo.clone().name).block_and_take();
-                                *self.workflow_runs.lock().unwrap().entry(_repo.name.clone()).or_insert(HashSet::default()) = runs;
+                            _repos.lock().unwrap().clone().into_iter().for_each(|_repo| {
+                                let _workflow_runs = self.workflow_runs.clone();
+                                github.fetch(token, &format!("https://api.github.com/repos/navikt/{}/actions/runs?status=failure&per_page=10", _repo.name.clone()), move |response| {
+                                    if let Ok(workflow_runs) = serde_json::from_slice::<WorkflowRuns>(&response) {
+                                        *_workflow_runs.lock().unwrap().entry(_repo.clone().name).or_insert(HashSet::default()) = workflow_runs.workflow_runs;
+                                    }
+                                });
                             });
                         }
 
-                        if ui.add(egui::SelectableLabel::new(*show_failed_pull_requests, "Hide pull-requests"))
-                            // .on_hover_text("Show/hide token")
-                            .clicked() { *show_failed_pull_requests = !*show_failed_pull_requests; };
+                        if ui.add(SelectableLabel::new(*show_failed_pull_requests, "Hide pull-requests")).clicked() {
+                            *show_failed_pull_requests = !*show_failed_pull_requests;
+                        };
                     });
 
                     StripBuilder::new(ui)
