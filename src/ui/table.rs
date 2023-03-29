@@ -1,6 +1,8 @@
 use std::collections::{BTreeMap, HashSet};
 
-use egui::{Color32, TextFormat, Ui};
+use eframe::epaint::FontId;
+use eframe::epaint::text::LayoutJob;
+use egui::{Color32, Ui};
 use egui::util::hash;
 use egui_extras::{Column, TableBuilder};
 
@@ -49,6 +51,7 @@ impl Table {
         &mut self,
         ui: &mut Ui,
         show_prs: bool,
+        show_success: bool,
         map_of_runs: &BTreeMap<String, HashSet<WorkflowRun>>,
     ) {
         let table = TableBuilder::new(ui)
@@ -63,9 +66,9 @@ impl Table {
 
         table.header(20.0, |mut header| {
             header.col(|ui| { ui.strong("Repo"); });
+            header.col(|ui| { ui.strong("Conclusion"); });
             header.col(|ui| { ui.strong("Workflow"); });
             header.col(|ui| { ui.strong("Event"); });
-            header.col(|ui| { ui.strong("Conclusion"); });
             header.col(|ui| { ui.strong("Attempts"); });
             header.col(|ui| { ui.strong("Timestamp"); });
         }).body(|mut body| {
@@ -78,20 +81,31 @@ impl Table {
 
                 newest_workflow_runs
                     .filter(|workflow_run| workflow_run.event.clone() != "pull_request" || show_prs)
+                    .filter(|workflow_run| workflow_run.conclusion.clone().unwrap_or_default() == "failure" || show_success)
                     .for_each(|workflow_run| {
                         body.row(18.0, |mut row| {
                             row.col(|ui| { ui.label(repo_name); });
+                            row.col(|ui| {
+                                let color = if let Some(conclusion) = &workflow_run.conclusion {
+                                    if conclusion == "failure" {
+                                        Color32::LIGHT_RED
+                                    } else {
+                                        Color32::LIGHT_GREEN
+                                    }
+                                } else {
+                                    Color32::LIGHT_GREEN
+                                };
+
+                                let conclusion = LayoutJob::simple_singleline(
+                                    workflow_run.conclusion.clone().unwrap_or_default(),
+                                    FontId::default(),
+                                    color,
+                                );
+
+                                ui.label(conclusion);
+                            });
                             row.col(|ui| { ui.hyperlink_to(&workflow_run.name.clone().unwrap_or_default(), &workflow_run.html_url.clone()); });
                             row.col(|ui| { ui.label(&workflow_run.event.clone()); });
-
-                            row.col(|ui| {
-                                use egui::text::LayoutJob;
-                                let red = TextFormat { color: Color32::from_rgb(255, 100, 100), ..Default::default() };
-                                let mut job = LayoutJob::default();
-                                job.append(workflow_run.conclusion.clone().unwrap_or_default().as_str(), 0.0, red);
-                                ui.label(job);
-                            });
-
                             row.col(|ui| { ui.label(format!("{}", &workflow_run.run_attempt.clone())); });
                             row.col(|ui| { ui.label(&workflow_run.run_started_at.clone().unwrap_or_default()); });
                         });
@@ -99,60 +113,4 @@ impl Table {
             }
         });
     }
-
-    // pub fn workflow_runs_ui(
-    //     &mut self,
-    //     ui: &mut Ui,
-    //     map_of_runs: &BTreeMap<String, HashSet<WorkflowRun>>,
-    // ) {
-    //     map_of_runs.clone()
-    //         .into_values()
-    //         .flatten()
-    //         .group_by(|run| run.event.clone())
-    //         .into_iter()
-    //         .for_each(|(group, workflow_runs)| {
-    //             ui.push_id(hash(&group), |ui| {
-    //                 // ui.group(|ui| {
-    //                     tracing::info!("group: {}", hash(&group));
-    //                     let table = TableBuilder::new(ui)
-    //                         .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-    //                         .column(Column::auto())
-    //                         .column(Column::auto())
-    //                         .column(Column::auto())
-    //                         .column(Column::auto())
-    //                         .column(Column::auto())
-    //                         .column(Column::auto())
-    //                         .min_scrolled_height(0.0);
-    //
-    //                     table.header(20.0, |mut header| {
-    //                         header.col(|ui| { ui.strong("Repo"); });
-    //                         header.col(|ui| { ui.strong("Workflow"); });
-    //                         header.col(|ui| { ui.strong("Event"); });
-    //                         header.col(|ui| { ui.strong("Conclusion"); });
-    //                         header.col(|ui| { ui.strong("Attempts"); });
-    //                         header.col(|ui| { ui.strong("Timestamp"); });
-    //                     }).body(|mut body| {
-    //                         workflow_runs.for_each(|workflow_run| {
-    //                             body.row(18.0, |mut row| {
-    //                                 row.col(|ui| { ui.label("temp"); });
-    //                                 row.col(|ui| { ui.hyperlink_to(&workflow_run.name.clone().unwrap_or_default(), &workflow_run.html_url.clone()); });
-    //                                 row.col(|ui| { ui.label(&workflow_run.event.clone()); });
-    //
-    //                                 row.col(|ui| {
-    //                                     use egui::text::LayoutJob;
-    //                                     let red = TextFormat { color: Color32::from_rgb(255, 100, 100), ..Default::default() };
-    //                                     let mut job = LayoutJob::default();
-    //                                     job.append(workflow_run.conclusion.clone().unwrap_or_default().as_str(), 0.0, red);
-    //                                     ui.label(job);
-    //                                 });
-    //
-    //                                 row.col(|ui| { ui.label(format!("{}", &workflow_run.run_attempt.clone())); });
-    //                                 row.col(|ui| { ui.label(&workflow_run.run_started_at.clone().unwrap_or_default()); });
-    //                             });
-    //                         });
-    //                     // });
-    //                 });
-    //             });
-    //         });
-    // }
 }

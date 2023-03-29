@@ -20,6 +20,7 @@ impl eframe::App for TemplateApp {
             token,
             show_token,
             show_failed_pull_requests,
+            show_failed_only: show_successful_runs,
             pr_table,
             run_table,
             state,
@@ -98,7 +99,8 @@ impl eframe::App for TemplateApp {
 
                             _repos.lock().unwrap().clone().into_iter().for_each(|_repo| {
                                 let _workflow_runs = self.workflow_runs.clone();
-                                github.fetch(token, &format!("https://api.github.com/repos/navikt/{}/actions/runs?status=failure&per_page=10", _repo.name.clone()), move |response| {
+                                github.fetch(token, &format!("https://api.github.com/repos/navikt/{}/actions/runs?per_page=10", _repo.name.clone()), move |response| {
+                                // github.fetch(token, &format!("https://api.github.com/repos/navikt/{}/actions/runs?status=failure&per_page=10", _repo.name.clone()), move |response| {
                                     if let Ok(workflow_runs) = serde_json::from_slice::<WorkflowRuns>(&response) {
                                         *_workflow_runs.lock().unwrap().entry(_repo.clone().name).or_insert(HashSet::default()) = workflow_runs.workflow_runs;
                                     }
@@ -109,6 +111,10 @@ impl eframe::App for TemplateApp {
                         if ui.add(SelectableLabel::new(*show_failed_pull_requests, "Hide pull-requests")).clicked() {
                             *show_failed_pull_requests = !*show_failed_pull_requests;
                         };
+
+                        if ui.add(SelectableLabel::new(*show_successful_runs, "Show successes")).clicked() {
+                            *show_successful_runs = !*show_successful_runs;
+                        };
                     });
 
                     StripBuilder::new(ui)
@@ -117,7 +123,7 @@ impl eframe::App for TemplateApp {
                             strip.cell(|ui| {
                                 ScrollArea::horizontal().show(ui, |ui| {
                                     let _runs = &self.workflow_runs.lock().unwrap();
-                                    run_table.workflow_runs_ui(ui, !show_failed_pull_requests.clone(), _runs)
+                                    run_table.workflow_runs_ui(ui, !show_failed_pull_requests.clone(), show_successful_runs.clone(), _runs)
                                 });
                             });
                         });
@@ -134,9 +140,6 @@ impl eframe::App for TemplateApp {
                                     *_team.lock().unwrap() = team;
                                 }
                             });
-                            // if let Some(team) = github.team(&team_name, token).block_and_take() {
-                            //     *self.team.lock().unwrap() = team;
-                            // }
                         }
 
                         if ui.button("Fetch async").clicked() {
@@ -237,6 +240,7 @@ impl Default for TemplateApp {
             token: String::from("<GitHub PAT>"),
             show_token: false,
             show_failed_pull_requests: true,
+            show_failed_only: false,
             pr_table: Table::default(),
             run_table: Table::default(),
             state: State::Repositories,
@@ -285,6 +289,7 @@ pub struct TemplateApp {
     token: String,
     show_token: bool,
     show_failed_pull_requests: bool,
+    show_failed_only: bool,
     pr_table: Table,
     run_table: Table,
     state: State,
