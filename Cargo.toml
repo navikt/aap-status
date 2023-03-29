@@ -21,6 +21,7 @@ eframe = { version = "0.21.3", default-features = false, features = [
 ] }
 
 poll-promise = { version = "0.2.0", default-features = false , features = ["web"]}
+itertools = "0.10.5"
 
 # native:
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]

@@ -58,6 +58,6 @@ pub struct Team {
 
 impl std::fmt::Display for Team {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Name:{} ID:{}", self.name, self.id)
+        write!(f, "Name:{}\nID:{}\nDescription:{}/nMembers:{}", self.name, self.id, self.slug, self.description.clone().unwrap_or_default(), )
     }
 }

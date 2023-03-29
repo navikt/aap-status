@@ -2,8 +2,9 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use eframe::epaint::{Color32, FontId};
+use egui::ScrollArea;
 
-use crate::github::github_client::{Fetcher, GitHubApi, Pulls, Repositories, Workflows};
+use crate::github::github_client::{Fetcher, GitHubApi, Pulls, Repositories, Teams, Workflows};
 use crate::github::pulls::PullRequest;
 use crate::github::repositories::Repo;
 use crate::github::teams::Team;
@@ -43,14 +44,18 @@ impl eframe::App for TemplateApp {
         });
 
         egui::SidePanel::left("side_panel").show(ctx, |ui| {
-            ui.heading("GitHub Status");
-            ui.separator();
-            if ui.button("Pull Requests").clicked() { *state = State::Pulls }
-            ui.separator();
-            if ui.button("Workflows").clicked() { *state = State::Runs }
-            ui.separator();
-            if ui.button("Repositories").clicked() { *state = State::Repositories }
-            ui.separator();
+            ui.vertical_centered(|ui| {
+                ui.heading("GitHub Status");
+                ui.group(|ui| {
+                    ui.separator();
+                    if ui.button("Pull Requests").clicked() { *state = State::Pulls }
+                    ui.separator();
+                    if ui.button("Workflows").clicked() { *state = State::Runs }
+                    ui.separator();
+                    if ui.button("Repositories").clicked() { *state = State::Repositories }
+                    ui.separator();
+                });
+            });
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -73,9 +78,10 @@ impl eframe::App for TemplateApp {
                         .size(Size::remainder().at_least(100.0))
                         .vertical(|mut strip| {
                             strip.cell(|ui| {
-                                egui::ScrollArea::horizontal().show(ui, |ui| {
-                                    pr_table.pull_requests_ui(ui, &self.pull_requests.lock().unwrap())
-                                });
+                                ScrollArea::horizontal()
+                                    .show(ui, |ui| {
+                                        pr_table.pull_requests_ui(ui, &self.pull_requests.lock().unwrap())
+                                    });
                             });
                         });
                 }
@@ -97,7 +103,7 @@ impl eframe::App for TemplateApp {
                         .size(Size::remainder().at_least(100.0))
                         .vertical(|mut strip| {
                             strip.cell(|ui| {
-                                egui::ScrollArea::horizontal().show(ui, |ui| {
+                                ScrollArea::horizontal().show(ui, |ui| {
                                     let _runs = &self.workflow_runs.lock().unwrap();
                                     run_table.workflow_runs_ui(ui, _runs)
                                 });
@@ -108,7 +114,11 @@ impl eframe::App for TemplateApp {
                     ui.heading("Repositories");
                     ui.horizontal_wrapped(|ui| {
                         if ui.text_edit_singleline(team_name).lost_focus() {
+                            tracing::info!("selected {:?}", &team_name);
                             *team_name = team_name.to_string();
+                            if let Some(team) = github.team(&team_name, token).block_and_take() {
+                                *self.team.lock().unwrap() = team;
+                            }
                         }
 
                         if ui.button("Fetch async").clicked() {
@@ -117,7 +127,7 @@ impl eframe::App for TemplateApp {
                             let repositories = github.repositories(token, &_team)
                                 .block_and_take()
                                 .into_iter()
-                                .filter(| repo | !_blacklisted.contains(repo))
+                                .filter(|repo| !_blacklisted.contains(repo))
                                 .collect::<HashSet<Repo>>();
                             *self.repositories.lock().unwrap() = repositories;
                         }
@@ -134,51 +144,59 @@ impl eframe::App for TemplateApp {
                     });
 
                     ui.separator();
+                    ui.group(|ui| {
+                        ui.label(format!("{}", self.team.lock().unwrap().clone()));
+                    });
 
                     ui.horizontal_wrapped(|ui| {
-                        ui.vertical(|ui| {
-                            let _repos = self.repositories.lock().unwrap().clone();
+                        ui.group(|ui| {
+                            ui.vertical(|ui| {
+                                let _repos = self.repositories.lock().unwrap().clone();
 
-                            ui.heading(format!("Selected: {}", &_repos.len()));
+                                ui.heading(format!("Selected: {}", &_repos.len()));
 
-                            _repos.into_iter().for_each(|repo| {
-                                ui.horizontal_wrapped(|ui| {
-                                    let blacklist_button = egui::text::LayoutJob::simple_singleline(
-                                        String::from("➡"),
-                                        FontId::default(),
-                                        Color32::LIGHT_RED,
-                                    );
 
-                                    if ui.button(blacklist_button).clicked() {
-                                        tracing::info!("blacklisted {:?}", &repo.name);
-                                        self.repositories.clone().lock().unwrap().remove(&repo);
-                                        self.blacklisted_repositories.clone().lock().unwrap().insert(repo.clone());
-                                    };
+                                _repos.into_iter().for_each(|repo| {
+                                    ui.horizontal_wrapped(|ui| {
+                                        let blacklist_button = egui::text::LayoutJob::simple_singleline(
+                                            String::from("➡"),
+                                            FontId::default(),
+                                            Color32::LIGHT_RED,
+                                        );
 
-                                    ui.label(&repo.name);
+                                        if ui.button(blacklist_button).clicked() {
+                                            tracing::info!("blacklisted {:?}", &repo.name);
+                                            self.repositories.clone().lock().unwrap().remove(&repo);
+                                            self.blacklisted_repositories.clone().lock().unwrap().insert(repo.clone());
+                                        };
+
+                                        ui.label(&repo.name);
+                                    });
                                 });
                             });
                         });
+                        ui.group(|ui| {
+                            ui.vertical(|ui| {
+                                let _blacklisted_repos = self.blacklisted_repositories.lock().unwrap().clone();
 
-                        ui.vertical(|ui| {
-                            let _blacklisted_repos = self.blacklisted_repositories.lock().unwrap().clone();
+                                ui.heading(format!("Blacklisted: {}", _blacklisted_repos.len()));
 
-                            ui.heading(format!("Blacklisted: {}", _blacklisted_repos.len()));
+                                _blacklisted_repos.into_iter().for_each(|repo| {
+                                    ui.horizontal_wrapped(|ui| {
+                                        let whitelist_button = egui::text::LayoutJob::simple_singleline(
+                                            String::from("⬅"),
+                                            FontId::default(),
+                                            Color32::LIGHT_GREEN,
+                                        );
 
-                            _blacklisted_repos.into_iter().for_each(|repo| {
-                                ui.horizontal_wrapped(|ui| {
-                                    let whitelist_button = egui::text::LayoutJob::simple_singleline(
-                                        String::from("⬅"),
-                                        FontId::default(),
-                                        Color32::LIGHT_GREEN,
-                                    );
+                                        if ui.button(whitelist_button).clicked() {
+                                            tracing::info!("whitelisted {:?}", &repo.name);
+                                            self.repositories.clone().lock().unwrap().insert(repo.clone());
+                                            self.blacklisted_repositories.clone().lock().unwrap().remove(&repo);
+                                        };
 
-                                    if ui.button(whitelist_button).clicked() {
-                                        tracing::info!("whitelisted {:?}", &repo.name);
-                                        self.repositories.clone().lock().unwrap().insert(repo.clone());
-                                        self.blacklisted_repositories.clone().lock().unwrap().remove(&repo);
-                                    };
-                                    ui.label(&repo.name);
+                                        ui.label(&repo.name);
+                                    });
                                 });
                             });
                         });
