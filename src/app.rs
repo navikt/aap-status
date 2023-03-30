@@ -39,9 +39,13 @@ impl eframe::App for TemplateApp {
                 ui.label("Personal Access Token:");
                 ui.add(egui::TextEdit::singleline(token).password(!*show_token));
 
-                if ui.add(SelectableLabel::new(*show_token, "👁"))
+                if ui
+                    .add(SelectableLabel::new(*show_token, "👁"))
                     .on_hover_text("Show/hide token")
-                    .clicked() { *show_token = !*show_token; };
+                    .clicked()
+                {
+                    *show_token = !*show_token;
+                };
             });
         });
 
@@ -50,11 +54,17 @@ impl eframe::App for TemplateApp {
                 ui.heading("GitHub Status");
                 ui.group(|ui| {
                     ui.separator();
-                    if ui.button("Pull Requests").clicked() { *state = State::Pulls }
+                    if ui.button("Pull Requests").clicked() {
+                        *state = State::Pulls
+                    }
                     ui.separator();
-                    if ui.button("Workflows").clicked() { *state = State::Runs }
+                    if ui.button("Workflows").clicked() {
+                        *state = State::Runs
+                    }
                     ui.separator();
-                    if ui.button("Repositories").clicked() { *state = State::Repositories }
+                    if ui.button("Repositories").clicked() {
+                        *state = State::Repositories
+                    }
                     ui.separator();
                 });
             });
@@ -69,24 +79,41 @@ impl eframe::App for TemplateApp {
                         self.pull_requests.lock().unwrap().clear();
                         let _repos = self.repositories.clone();
 
-                        _repos.lock().unwrap().clone().into_iter().for_each(|_repo| {
-                            let _pulls = self.pull_requests.clone();
-                            github.fetch_path(token, &format!("/repos/navikt/{}/pulls", _repo.name), move |response| {
-                                if let Ok(pull_requests) = serde_json::from_slice::<HashSet<PullRequest>>(&response) {
-                                    *_pulls.lock().unwrap().entry(_repo.clone().name).or_insert(HashSet::default()) = pull_requests;
-                                }
+                        _repos
+                            .lock()
+                            .unwrap()
+                            .clone()
+                            .into_iter()
+                            .for_each(|_repo| {
+                                let _pulls = self.pull_requests.clone();
+                                github.fetch_path(
+                                    token,
+                                    &format!("/repos/navikt/{}/pulls", _repo.name),
+                                    move |response| {
+                                        if let Ok(pull_requests) =
+                                            serde_json::from_slice::<HashSet<PullRequest>>(
+                                                &response,
+                                            )
+                                        {
+                                            *_pulls
+                                                .lock()
+                                                .unwrap()
+                                                .entry(_repo.clone().name)
+                                                .or_insert(HashSet::default()) = pull_requests;
+                                        }
+                                    },
+                                );
                             });
-                        });
                     }
 
                     StripBuilder::new(ui)
                         .size(Size::remainder().at_least(100.0))
                         .vertical(|mut strip| {
                             strip.cell(|ui| {
-                                ScrollArea::horizontal()
-                                    .show(ui, |ui| {
-                                        pr_table.pull_requests_ui(ui, &self.pull_requests.lock().unwrap())
-                                    });
+                                ScrollArea::horizontal().show(ui, |ui| {
+                                    pr_table
+                                        .pull_requests_ui(ui, &self.pull_requests.lock().unwrap())
+                                });
                             });
                         });
                 }
@@ -97,22 +124,53 @@ impl eframe::App for TemplateApp {
                             self.workflow_runs.lock().unwrap().clear();
                             let _repos = self.repositories.clone();
 
-                            _repos.lock().unwrap().clone().into_iter().for_each(|_repo| {
-                                let _workflow_runs = self.workflow_runs.clone();
+                            _repos
+                                .lock()
+                                .unwrap()
+                                .clone()
+                                .into_iter()
+                                .for_each(|_repo| {
+                                    let _workflow_runs = self.workflow_runs.clone();
 
-                                github.fetch_path(token, &format!("/repos/navikt/{}/actions/runs?per_page=15", _repo.name), move |response| {
-                                    if let Ok(workflow_runs) = serde_json::from_slice::<WorkflowRuns>(&response) {
-                                        *_workflow_runs.lock().unwrap().entry(_repo.clone().name).or_insert(HashSet::default()) = workflow_runs.workflow_runs;
-                                    }
+                                    github.fetch_path(
+                                        token,
+                                        &format!(
+                                            "/repos/navikt/{}/actions/runs?per_page=15",
+                                            _repo.name
+                                        ),
+                                        move |response| {
+                                            if let Ok(workflow_runs) =
+                                                serde_json::from_slice::<WorkflowRuns>(&response)
+                                            {
+                                                *_workflow_runs
+                                                    .lock()
+                                                    .unwrap()
+                                                    .entry(_repo.clone().name)
+                                                    .or_insert(HashSet::default()) =
+                                                    workflow_runs.workflow_runs;
+                                            }
+                                        },
+                                    );
                                 });
-                            });
                         }
 
-                        if ui.add(SelectableLabel::new(*show_failed_pull_requests, "Hide pull-requests")).clicked() {
+                        if ui
+                            .add(SelectableLabel::new(
+                                *show_failed_pull_requests,
+                                "Hide pull-requests",
+                            ))
+                            .clicked()
+                        {
                             *show_failed_pull_requests = !*show_failed_pull_requests;
                         };
 
-                        if ui.add(SelectableLabel::new(*show_successful_runs, "Show successes")).clicked() {
+                        if ui
+                            .add(SelectableLabel::new(
+                                *show_successful_runs,
+                                "Show successes",
+                            ))
+                            .clicked()
+                        {
                             *show_successful_runs = !*show_successful_runs;
                         };
                     });
@@ -123,7 +181,12 @@ impl eframe::App for TemplateApp {
                             strip.cell(|ui| {
                                 ScrollArea::horizontal().show(ui, |ui| {
                                     let _runs = &self.workflow_runs.lock().unwrap();
-                                    run_table.workflow_runs_ui(ui, !*show_failed_pull_requests, *show_successful_runs, _runs)
+                                    run_table.workflow_runs_ui(
+                                        ui,
+                                        !*show_failed_pull_requests,
+                                        *show_successful_runs,
+                                        _runs,
+                                    )
                                 });
                             });
                         });
@@ -135,17 +198,23 @@ impl eframe::App for TemplateApp {
                             tracing::info!("selected {:?}", &team_name);
                             *team_name = team_name.to_string();
                             let _team = self.team.clone();
-                            github.fetch_path(token, &format!("/orgs/navikt/teams/{}", &team_name), move |response| {
-                                if let Ok(team) = serde_json::from_slice::<Team>(&response) {
-                                    *_team.lock().unwrap() = team;
-                                }
-                            });
+                            github.fetch_path(
+                                token,
+                                &format!("/orgs/navikt/teams/{}", &team_name),
+                                move |response| {
+                                    if let Ok(team) = serde_json::from_slice::<Team>(&response) {
+                                        *_team.lock().unwrap() = team;
+                                    }
+                                },
+                            );
                         }
 
                         if ui.button("Fetch async").clicked() {
                             let _team = self.team.lock().unwrap().clone();
-                            let _blacklisted = self.blacklisted_repositories.lock().unwrap().clone();
-                            let repositories = github.repositories(token, &_team)
+                            let _blacklisted =
+                                self.blacklisted_repositories.lock().unwrap().clone();
+                            let repositories = github
+                                .repositories(token, &_team)
                                 .block_and_take()
                                 .into_iter()
                                 .filter(|repo| !_blacklisted.contains(repo))
@@ -156,11 +225,17 @@ impl eframe::App for TemplateApp {
                         if ui.button("Fetch").clicked() {
                             let _repositories = self.repositories.clone();
                             let _team = self.team.lock().unwrap().clone();
-                            github.fetch_url(token, format!("{}{}", &_team.repositories_url, "?per_page=100").as_str(), move |response| {
-                                if let Ok(repositories) = serde_json::from_slice::<HashSet<Repo>>(&response) {
-                                    *_repositories.lock().unwrap() = repositories;
-                                }
-                            });
+                            github.fetch_url(
+                                token,
+                                format!("{}{}", &_team.repositories_url, "?per_page=100").as_str(),
+                                move |response| {
+                                    if let Ok(repositories) =
+                                        serde_json::from_slice::<HashSet<Repo>>(&response)
+                                    {
+                                        *_repositories.lock().unwrap() = repositories;
+                                    }
+                                },
+                            );
                         }
                     });
 
@@ -174,16 +249,21 @@ impl eframe::App for TemplateApp {
 
                                 _repos.into_iter().for_each(|repo| {
                                     ui.horizontal_wrapped(|ui| {
-                                        let blacklist_button = egui::text::LayoutJob::simple_singleline(
-                                            String::from("➡"),
-                                            FontId::default(),
-                                            Color32::LIGHT_RED,
-                                        );
+                                        let blacklist_button =
+                                            egui::text::LayoutJob::simple_singleline(
+                                                String::from("➡"),
+                                                FontId::default(),
+                                                Color32::LIGHT_RED,
+                                            );
 
                                         if ui.button(blacklist_button).clicked() {
                                             tracing::info!("blacklisted {:?}", &repo.name);
                                             self.repositories.clone().lock().unwrap().remove(&repo);
-                                            self.blacklisted_repositories.clone().lock().unwrap().insert(repo.clone());
+                                            self.blacklisted_repositories
+                                                .clone()
+                                                .lock()
+                                                .unwrap()
+                                                .insert(repo.clone());
                                         };
 
                                         ui.label(&repo.name);
@@ -193,22 +273,32 @@ impl eframe::App for TemplateApp {
                         });
                         ui.group(|ui| {
                             ui.vertical(|ui| {
-                                let _blacklisted_repos = self.blacklisted_repositories.lock().unwrap().clone();
+                                let _blacklisted_repos =
+                                    self.blacklisted_repositories.lock().unwrap().clone();
 
                                 ui.heading(format!("Blacklisted: {}", _blacklisted_repos.len()));
 
                                 _blacklisted_repos.into_iter().for_each(|repo| {
                                     ui.horizontal_wrapped(|ui| {
-                                        let whitelist_button = egui::text::LayoutJob::simple_singleline(
-                                            String::from("⬅"),
-                                            FontId::default(),
-                                            Color32::LIGHT_GREEN,
-                                        );
+                                        let whitelist_button =
+                                            egui::text::LayoutJob::simple_singleline(
+                                                String::from("⬅"),
+                                                FontId::default(),
+                                                Color32::LIGHT_GREEN,
+                                            );
 
                                         if ui.button(whitelist_button).clicked() {
                                             tracing::info!("whitelisted {:?}", &repo.name);
-                                            self.repositories.clone().lock().unwrap().insert(repo.clone());
-                                            self.blacklisted_repositories.clone().lock().unwrap().remove(&repo);
+                                            self.repositories
+                                                .clone()
+                                                .lock()
+                                                .unwrap()
+                                                .insert(repo.clone());
+                                            self.blacklisted_repositories
+                                                .clone()
+                                                .lock()
+                                                .unwrap()
+                                                .remove(&repo);
                                         };
 
                                         ui.label(&repo.name);
@@ -217,7 +307,9 @@ impl eframe::App for TemplateApp {
                             });
                         });
                         ui.group(|ui| {
-                            ui.vertical(|ui|ui.label(format!("{}", self.team.lock().unwrap().clone())));
+                            ui.vertical(|ui| {
+                                ui.label(format!("{}", self.team.lock().unwrap().clone()))
+                            });
                         });
                     });
                 }
@@ -270,8 +362,7 @@ impl TemplateApp {
     }
 }
 
-#[derive(PartialEq)]
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(PartialEq, serde::Deserialize, serde::Serialize)]
 pub enum State {
     Repositories,
     Pulls,

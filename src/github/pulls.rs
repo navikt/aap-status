@@ -22,17 +22,15 @@ impl Pulls for GitHubApi {
 
         ehttp::fetch(request, move |response| {
             match response {
-                Ok(res) => {
-                    match serde_json::from_slice::<HashSet<PullRequest>>(&res.bytes) {
-                        Ok(value) => sender.send(value),
-                        Err(e) => {
-                            tracing::error!{%e, "Failed to deserialize {url}"}
-                            sender.send(HashSet::default());
-                        }
+                Ok(res) => match serde_json::from_slice::<HashSet<PullRequest>>(&res.bytes) {
+                    Ok(value) => sender.send(value),
+                    Err(e) => {
+                        tracing::error! {%e, "Failed to deserialize {url}"}
+                        sender.send(HashSet::default());
                     }
-                }
+                },
                 Err(e) => {
-                    tracing::error!{%e, "Failed to fetch {url}"}
+                    tracing::error! {%e, "Failed to fetch {url}"}
                     sender.send(HashSet::default());
                 }
             };
@@ -71,7 +69,9 @@ pub struct PullRequest {
 }
 
 impl Hash for PullRequest {
-    fn hash<H: Hasher>(&self, state: &mut H) { self.id.hash(state) }
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Default)]

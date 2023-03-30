@@ -23,17 +23,15 @@ impl Repositories for GitHubApi {
 
         ehttp::fetch(request, move |response| {
             match response {
-                Ok(res) => {
-                    match serde_json::from_slice::<HashSet<Repo>>(&res.bytes) {
-                        Ok(teams) => sender.send(teams),
-                        Err(e) => {
-                            tracing::error!{%e, "Failed to deserialize {url}"}
-                            sender.send(HashSet::new())
-                        },
+                Ok(res) => match serde_json::from_slice::<HashSet<Repo>>(&res.bytes) {
+                    Ok(teams) => sender.send(teams),
+                    Err(e) => {
+                        tracing::error! {%e, "Failed to deserialize {url}"}
+                        sender.send(HashSet::new())
                     }
-                }
+                },
                 Err(e) => {
-                    tracing::error!{%e, "Failed to fetch {url}"}
+                    tracing::error! {%e, "Failed to fetch {url}"}
                     sender.send(HashSet::new());
                 }
             };

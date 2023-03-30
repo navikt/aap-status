@@ -9,27 +9,27 @@ use crate::github::pulls::PullRequest;
 
 impl Workflows for GitHubApi {
     fn workflows(&self, token: &mut String, repo: &str) -> Promise<HashSet<Workflow>> {
-
         let request = ehttp::Request {
             headers: ehttp::headers(&[
                 ("Accept", "application/vnd.github+json"),
                 ("User-Agent", "rust web-api-client demo"),
                 ("Authorization", format!("Bearer {}", token.trim()).as_str()),
             ]),
-            ..ehttp::Request::get(format!("https://api.github.com/repos/navikt/{}/actions/workflows", repo))
+            ..ehttp::Request::get(format!(
+                "https://api.github.com/repos/navikt/{}/actions/workflows",
+                repo
+            ))
         };
 
         let (sender, promise) = Promise::new();
 
         ehttp::fetch(request, move |response| {
             match response {
-                Ok(res) => {
-                    match serde_json::from_slice::<WorkflowsResponse>(&res.bytes) {
-                        Ok(workflows) => sender.send(workflows.workflows),
-                        Err(_) => sender.send(HashSet::new())
-                    }
-                }
-                Err(_) => sender.send(HashSet::new())
+                Ok(res) => match serde_json::from_slice::<WorkflowsResponse>(&res.bytes) {
+                    Ok(workflows) => sender.send(workflows.workflows),
+                    Err(_) => sender.send(HashSet::new()),
+                },
+                Err(_) => sender.send(HashSet::new()),
             };
         });
 
@@ -37,7 +37,10 @@ impl Workflows for GitHubApi {
     }
 
     fn workflow_runs(&self, token: &mut String, repo: &str) -> Promise<HashSet<WorkflowRun>> {
-        let url = format!("https://api.github.com/repos/navikt/{}/actions/runs?status=failure&per_page=10", repo);
+        let url = format!(
+            "https://api.github.com/repos/navikt/{}/actions/runs?status=failure&per_page=10",
+            repo
+        );
         let request = ehttp::Request {
             headers: ehttp::headers(&[
                 ("Accept", "application/vnd.github+json"),
@@ -51,17 +54,15 @@ impl Workflows for GitHubApi {
 
         ehttp::fetch(request, move |response| {
             match response {
-                Ok(res) => {
-                    match serde_json::from_slice::<WorkflowRuns>(&res.bytes) {
-                        Ok(runs) => sender.send(runs.workflow_runs),
-                        Err(e) => {
-                            tracing::error!{%e, "Failed to deserialize {url}"}
-                            sender.send(HashSet::new())
-                        },
+                Ok(res) => match serde_json::from_slice::<WorkflowRuns>(&res.bytes) {
+                    Ok(runs) => sender.send(runs.workflow_runs),
+                    Err(e) => {
+                        tracing::error! {%e, "Failed to deserialize {url}"}
+                        sender.send(HashSet::new())
                     }
-                }
+                },
                 Err(e) => {
-                    tracing::error!{%e, "Failed to fetch {url}"}
+                    tracing::error! {%e, "Failed to fetch {url}"}
                     sender.send(HashSet::new());
                 }
             };
@@ -87,9 +88,10 @@ pub struct Workflow {
 }
 
 impl Hash for Workflow {
-    fn hash<H: Hasher>(&self, state: &mut H) { self.id.hash(state) }
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state)
+    }
 }
-
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct WorkflowRuns {
@@ -130,7 +132,9 @@ pub struct WorkflowRun {
 }
 
 impl Hash for WorkflowRun {
-    fn hash<H: Hasher>(&self, state: &mut H) { self.id.hash(state) }
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]

@@ -8,13 +8,13 @@ fn main() {
     // Log to stdout (if you run with `RUST_LOG=debug`).
     tracing_subscriber::fmt::init();
 
-
     let native_options = eframe::NativeOptions::default();
     eframe::run_native(
         "AAP Status",
         native_options,
         Box::new(|cc| Box::new(TemplateApp::new(cc))),
-    ).expect("Failed to start native");
+    )
+    .expect("Failed to start native");
 }
 
 // when compiling to web using trunk.
