@@ -71,7 +71,7 @@ impl eframe::App for TemplateApp {
 
                         _repos.lock().unwrap().clone().into_iter().for_each(|_repo| {
                             let _pulls = self.pull_requests.clone();
-                            github.fetch(token, &format!("https://api.github.com/repos/navikt/{}/pulls", _repo.name.clone()), move|response| {
+                            github.fetch_path(token, &format!("/repos/navikt/{}/pulls", _repo.name), move |response| {
                                 if let Ok(pull_requests) = serde_json::from_slice::<HashSet<PullRequest>>(&response) {
                                     *_pulls.lock().unwrap().entry(_repo.clone().name).or_insert(HashSet::default()) = pull_requests;
                                 }
@@ -99,8 +99,8 @@ impl eframe::App for TemplateApp {
 
                             _repos.lock().unwrap().clone().into_iter().for_each(|_repo| {
                                 let _workflow_runs = self.workflow_runs.clone();
-                                github.fetch(token, &format!("https://api.github.com/repos/navikt/{}/actions/runs?per_page=10", _repo.name.clone()), move |response| {
-                                // github.fetch(token, &format!("https://api.github.com/repos/navikt/{}/actions/runs?status=failure&per_page=10", _repo.name.clone()), move |response| {
+
+                                github.fetch_path(token, &format!("/repos/navikt/{}/actions/runs?per_page=15", _repo.name), move |response| {
                                     if let Ok(workflow_runs) = serde_json::from_slice::<WorkflowRuns>(&response) {
                                         *_workflow_runs.lock().unwrap().entry(_repo.clone().name).or_insert(HashSet::default()) = workflow_runs.workflow_runs;
                                     }
@@ -123,7 +123,7 @@ impl eframe::App for TemplateApp {
                             strip.cell(|ui| {
                                 ScrollArea::horizontal().show(ui, |ui| {
                                     let _runs = &self.workflow_runs.lock().unwrap();
-                                    run_table.workflow_runs_ui(ui, !show_failed_pull_requests.clone(), show_successful_runs.clone(), _runs)
+                                    run_table.workflow_runs_ui(ui, !*show_failed_pull_requests, *show_successful_runs, _runs)
                                 });
                             });
                         });
@@ -135,7 +135,7 @@ impl eframe::App for TemplateApp {
                             tracing::info!("selected {:?}", &team_name);
                             *team_name = team_name.to_string();
                             let _team = self.team.clone();
-                            github.fetch(token, &format!("https://api.github.com/orgs/navikt/teams/{}", &team_name), move |response| {
+                            github.fetch_path(token, &format!("/orgs/navikt/teams/{}", &team_name), move |response| {
                                 if let Ok(team) = serde_json::from_slice::<Team>(&response) {
                                     *_team.lock().unwrap() = team;
                                 }
@@ -156,7 +156,7 @@ impl eframe::App for TemplateApp {
                         if ui.button("Fetch").clicked() {
                             let _repositories = self.repositories.clone();
                             let _team = self.team.lock().unwrap().clone();
-                            github.fetch(token, format!("{}{}", &_team.repositories_url, "?per_page=100").as_str(), move |response| {
+                            github.fetch_url(token, format!("{}{}", &_team.repositories_url, "?per_page=100").as_str(), move |response| {
                                 if let Ok(repositories) = serde_json::from_slice::<HashSet<Repo>>(&response) {
                                     *_repositories.lock().unwrap() = repositories;
                                 }
@@ -165,17 +165,12 @@ impl eframe::App for TemplateApp {
                     });
 
                     ui.separator();
-                    ui.group(|ui| {
-                        ui.label(format!("{}", self.team.lock().unwrap().clone()));
-                    });
-
                     ui.horizontal_wrapped(|ui| {
                         ui.group(|ui| {
                             ui.vertical(|ui| {
                                 let _repos = self.repositories.lock().unwrap().clone();
 
                                 ui.heading(format!("Selected: {}", &_repos.len()));
-
 
                                 _repos.into_iter().for_each(|repo| {
                                     ui.horizontal_wrapped(|ui| {
@@ -220,6 +215,9 @@ impl eframe::App for TemplateApp {
                                     });
                                 });
                             });
+                        });
+                        ui.group(|ui| {
+                            ui.vertical(|ui|ui.label(format!("{}", self.team.lock().unwrap().clone())));
                         });
                     });
                 }

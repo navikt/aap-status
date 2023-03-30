@@ -25,13 +25,13 @@ impl Teams for GitHubApi {
                     match serde_json::from_slice::<Team>(&res.bytes) {
                         Ok(team) => sender.send(Some(team)),
                         Err(e) => {
-                            tracing::error!{%e, "Failed to deserialize {url}"}
+                            tracing::error! {%e, "Failed to deserialize {url}"}
                             sender.send(None);
                         }
                     }
                 }
                 Err(e) => {
-                    tracing::error!{%e, "Failed to fetch {url}"}
+                    tracing::error! {%e, "Failed to fetch {url}"}
                     sender.send(None);
                 }
             };
@@ -58,6 +58,6 @@ pub struct Team {
 
 impl std::fmt::Display for Team {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Name:{}\nID:{}\nDescription:{}/nMembers:{}", self.name, self.id, self.slug, self.description.clone().unwrap_or_default(), )
+        write!(f, "Name:{}\nID:{}\nDescription:{}", self.name, self.id, self.description.clone().unwrap_or_default())
     }
 }
