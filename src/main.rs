@@ -13,8 +13,7 @@ fn main() {
         "AAP Status",
         native_options,
         Box::new(|cc| Box::new(TemplateApp::new(cc))),
-    )
-    .expect("Failed to start native");
+    ).expect("Failed to start native");
 }
 
 // when compiling to web using trunk.
@@ -33,8 +32,6 @@ fn main() {
             "the_canvas_id", // hardcode it
             web_options,
             Box::new(|cc| Box::new(TemplateApp::new(cc))),
-        )
-        .await
-        .expect("failed to start eframe");
+        ).await.expect("failed to start eframe");
     });
 }

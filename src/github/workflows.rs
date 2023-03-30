@@ -9,16 +9,14 @@ use crate::github::pulls::PullRequest;
 
 impl Workflows for GitHubApi {
     fn workflows(&self, token: &mut String, repo: &str) -> Promise<HashSet<Workflow>> {
+        let url = format!("https://api.github.com/repos/navikt/{}/actions/workflows", repo);
         let request = ehttp::Request {
             headers: ehttp::headers(&[
                 ("Accept", "application/vnd.github+json"),
                 ("User-Agent", "rust web-api-client demo"),
                 ("Authorization", format!("Bearer {}", token.trim()).as_str()),
             ]),
-            ..ehttp::Request::get(format!(
-                "https://api.github.com/repos/navikt/{}/actions/workflows",
-                repo
-            ))
+            ..ehttp::Request::get(url)
         };
 
         let (sender, promise) = Promise::new();
@@ -37,10 +35,7 @@ impl Workflows for GitHubApi {
     }
 
     fn workflow_runs(&self, token: &mut String, repo: &str) -> Promise<HashSet<WorkflowRun>> {
-        let url = format!(
-            "https://api.github.com/repos/navikt/{}/actions/runs?status=failure&per_page=10",
-            repo
-        );
+        let url = format!("https://api.github.com/repos/navikt/{}/actions/runs?status=failure&per_page=10", repo);
         let request = ehttp::Request {
             headers: ehttp::headers(&[
                 ("Accept", "application/vnd.github+json"),
