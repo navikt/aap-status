@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use eframe::epaint::{Color32, FontId};
-use egui::{CentralPanel, ScrollArea, SelectableLabel, SidePanel, TopBottomPanel};
+use egui::{CentralPanel, ScrollArea, SelectableLabel, SidePanel, TextEdit, TopBottomPanel};
 use egui::text::LayoutJob;
 use egui_extras::{Size, StripBuilder};
 
@@ -10,19 +10,33 @@ use crate::github::github_client::*;
 use crate::github::github_models::*;
 use crate::ui::table::Table;
 
-impl eframe::App for TemplateApp {
+impl Application {
+    /// Called once before the first frame.
+    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // This is also where you can customize the look and feel of egui using
+        // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
+
+        // Load previous app state (if any).
+        // Note that you must enable the `persistence` feature for this to work.
+        if let Some(storage) = cc.storage {
+            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
+        }
+
+        Default::default()
+    }
+}
+
+impl eframe::App for Application {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let Self {
             github,
             token,
-            show_token,
-            show_failed_pull_requests,
-            show_successful_runs,
+            workflows_options,
             pr_table,
             run_table,
-            state,
+            panel,
             team_name,
             team: _,
             teams: _,
@@ -36,9 +50,9 @@ impl eframe::App for TemplateApp {
         TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.label("PAT").on_hover_text("Get your Personal Access Token from Github and select repo and workflow persmissions");
-                ui.add(egui::TextEdit::singleline(token).password(!*show_token));
-                if ui.add(SelectableLabel::new(*show_token, "👁")).on_hover_text("Show/hide token").clicked() {
-                    *show_token = !*show_token;
+                ui.add(TextEdit::singleline(&mut token.value).password(!token.show));
+                if ui.add(SelectableLabel::new(token.show, "👁")).on_hover_text("Show/hide token").clicked() {
+                    *token = token.toggle();
                 };
             });
         });
@@ -48,19 +62,19 @@ impl eframe::App for TemplateApp {
                 ui.heading("GitHub Status");
                 ui.group(|ui| {
                     ui.separator();
-                    if ui.button("  Pull Requests  ").clicked() { *state = State::Pulls }
+                    if ui.button("  Pull Requests  ").clicked() { *panel = Panel::PullRequests }
                     ui.separator();
-                    if ui.button("  Workflows  ").clicked() { *state = State::Runs }
+                    if ui.button("  Workflows  ").clicked() { *panel = Panel::WorkflowRuns }
                     ui.separator();
-                    if ui.button("  Repositories  ").clicked() { *state = State::Repositories }
+                    if ui.button("  Repositories  ").clicked() { *panel = Panel::Repositories }
                     ui.separator();
                 });
             });
         });
 
         CentralPanel::default().show(ctx, |ui| {
-            match state {
-                State::Pulls => {
+            match panel {
+                Panel::PullRequests => {
                     ui.heading("Pull Requests");
                     if ui.button("Refresh").clicked() {
                         self.pull_requests.lock().unwrap().clear();
@@ -68,7 +82,7 @@ impl eframe::App for TemplateApp {
 
                         _repos.lock().unwrap().clone().into_iter().for_each(|_repo| {
                             let _pulls = self.pull_requests.clone();
-                            github.fetch_path(token, &format!("/repos/navikt/{}/pulls", _repo.name), move |response| {
+                            github.fetch_path(&mut token.value, &format!("/repos/navikt/{}/pulls", _repo.name), move |response| {
                                 if let Ok(pull_requests) = serde_json::from_slice::<HashSet<PullRequest>>(&response) {
                                     *_pulls.lock().unwrap()
                                         .entry(_repo.clone().name)
@@ -88,7 +102,7 @@ impl eframe::App for TemplateApp {
                             });
                         });
                 }
-                State::Runs => {
+                Panel::WorkflowRuns => {
                     ui.heading("Failed Workflows");
                     ui.horizontal_wrapped(|ui| {
                         if ui.button("Refresh").clicked() {
@@ -98,7 +112,7 @@ impl eframe::App for TemplateApp {
                             _repos.lock().unwrap().clone().into_iter().for_each(|_repo| {
                                 let _workflow_runs = self.workflow_runs.clone();
 
-                                github.fetch_path(token, &format!("/repos/navikt/{}/actions/runs?per_page=15", _repo.name), move |response| {
+                                github.fetch_path(&mut token.value, &format!("/repos/navikt/{}/actions/runs?per_page=15", _repo.name), move |response| {
                                     if let Ok(workflow_runs) = serde_json::from_slice::<WorkflowRuns>(&response) {
                                         *_workflow_runs.lock().unwrap()
                                             .entry(_repo.clone().name)
@@ -108,13 +122,12 @@ impl eframe::App for TemplateApp {
                             });
                         }
 
-                        if ui.add(SelectableLabel::new(*show_failed_pull_requests, "Hide pull-requests")).clicked() {
-                            *show_failed_pull_requests = !*show_failed_pull_requests;
+                        if ui.add(SelectableLabel::new(workflows_options.show_prs, "Show pull-requests")).clicked() {
+                            *workflows_options = workflows_options.toggle_prs();
                         };
 
-                        if ui.add(SelectableLabel::new(*show_successful_runs, "Show successes")).clicked()
-                        {
-                            *show_successful_runs = !*show_successful_runs;
+                        if ui.add(SelectableLabel::new(workflows_options.show_success, "Show successful")).clicked() {
+                            *workflows_options = workflows_options.toggle_success();
                         };
                     });
 
@@ -124,12 +137,12 @@ impl eframe::App for TemplateApp {
                             strip.cell(|ui| {
                                 ScrollArea::horizontal().show(ui, |ui| {
                                     let _runs = &self.workflow_runs.lock().unwrap();
-                                    run_table.workflow_runs_ui(ui, !*show_failed_pull_requests, *show_successful_runs, _runs)
+                                    run_table.workflow_runs_ui(ui, workflows_options.show_prs, workflows_options.show_success, _runs)
                                 });
                             });
                         });
                 }
-                State::Repositories => {
+                Panel::Repositories => {
                     ui.heading("Repositories");
 
                     ui.horizontal_wrapped(|ui| {
@@ -137,7 +150,7 @@ impl eframe::App for TemplateApp {
                         if ui.text_edit_singleline(team_name).lost_focus() {
                             *team_name = team_name.to_string();
                             let _team = self.team.clone();
-                            github.fetch_path(token, &format!("/orgs/navikt/teams/{}", &team_name), move |response| {
+                            github.fetch_path(&mut token.value, &format!("/orgs/navikt/teams/{}", &team_name), move |response| {
                                 if let Ok(team) = serde_json::from_slice::<Team>(&response) {
                                     *_team.lock().unwrap() = team;
                                 }
@@ -148,7 +161,7 @@ impl eframe::App for TemplateApp {
                             let _repositories = self.repositories.clone();
                             let _team = self.team.lock().unwrap().clone();
                             let _blacklisted = self.blacklisted_repositories.lock().unwrap().clone();
-                            github.fetch_url(token, format!("{}{}", &_team.repositories_url, "?per_page=100").as_str(), move |response| {
+                            github.fetch_url(&mut token.value, format!("{}{}", &_team.repositories_url, "?per_page=100").as_str(), move |response| {
                                 if let Ok(repositories) = serde_json::from_slice::<HashSet<Repo>>(&response) {
                                     *_repositories.lock().unwrap() = repositories.into_iter()
                                         .filter(|repo| !_blacklisted.contains(repo))
@@ -218,65 +231,64 @@ impl eframe::App for TemplateApp {
     }
 }
 
-impl Default for TemplateApp {
-    fn default() -> Self {
-        Self {
-            github: GitHubApi::default(),
-            token: String::from("<GitHub PAT>"),
-            show_token: false,
-            show_failed_pull_requests: true,
-            show_successful_runs: true,
-            pr_table: Table::default(),
-            run_table: Table::default(),
-            state: State::Repositories,
-            team_name: String::from("aap"),
-            team: Arc::default(),
-            teams: Arc::default(),
-            pull_requests: Arc::default(),
-            workflows: Arc::default(),
-            workflow_runs: Arc::default(),
-            repositories: Arc::default(),
-            blacklisted_repositories: Arc::default(),
-        }
-    }
-}
-
-impl TemplateApp {
-    /// Called once before the first frame.
-    pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // This is also where you can customize the look and feel of egui using
-        // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
-
-        // Load previous app state (if any).
-        // Note that you must enable the `persistence` feature for this to work.
-        if let Some(storage) = cc.storage {
-            return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
-        }
-
-        Default::default()
-    }
-}
-
 #[derive(PartialEq, serde::Deserialize, serde::Serialize)]
-pub enum State {
+enum Panel {
     Repositories,
-    Pulls,
-    Runs,
+    PullRequests,
+    WorkflowRuns,
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
+impl Default for Panel {
+    fn default() -> Self { Self::Repositories }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Default, Clone)]
+struct Token {
+    value: String,
+    show: bool,
+}
+
+impl Token {
+    fn toggle(&self) -> Self {
+        Token {
+            show: !self.show,
+            ..self.clone()
+        }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Default, Clone)]
+struct WorkflowsOptions {
+    show_prs: bool,
+    show_success: bool,
+}
+
+impl WorkflowsOptions {
+    fn toggle_success(&self) -> Self {
+        WorkflowsOptions {
+            show_success: !self.show_success,
+            ..self.clone()
+        }
+    }
+
+    fn toggle_prs(&self) -> Self {
+        WorkflowsOptions {
+            show_prs: !self.show_prs,
+            ..self.clone()
+        }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Default)]
 #[serde(default)]
-pub struct TemplateApp {
+pub struct Application {
     #[serde(skip)]
     github: GitHubApi,
-
-    token: String,
-    show_token: bool,
-    show_failed_pull_requests: bool,
-    show_successful_runs: bool,
+    token: Token,
+    workflows_options: WorkflowsOptions,
     pr_table: Table,
     run_table: Table,
-    state: State,
+    panel: Panel,
     team_name: String,
 
     team: Arc<Mutex<Team>>,

@@ -1,7 +1,7 @@
 #![warn(clippy::all, rust_2018_idioms)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use aap_status::TemplateApp;
+use aap_status::Application;
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
@@ -12,7 +12,7 @@ fn main() {
     eframe::run_native(
         "AAP Status",
         native_options,
-        Box::new(|cc| Box::new(TemplateApp::new(cc))),
+        Box::new(|cc| Box::new(Application::new(cc))),
     ).expect("Failed to start native");
 }
 
@@ -31,7 +31,7 @@ fn main() {
         eframe::start_web(
             "the_canvas_id", // hardcode it
             web_options,
-            Box::new(|cc| Box::new(TemplateApp::new(cc))),
+            Box::new(|cc| Box::new(Application::new(cc))),
         ).await.expect("failed to start eframe");
     });
 }
