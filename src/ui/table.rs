@@ -6,8 +6,7 @@ use egui::{Color32, Ui};
 use egui::util::hash;
 use egui_extras::{Column, TableBuilder};
 
-use crate::github::pulls::PullRequest;
-use crate::github::workflows::WorkflowRun;
+use crate::github::github_models::*;
 
 #[derive(Default, serde::Deserialize, serde::Serialize)]
 #[serde(default)]

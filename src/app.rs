@@ -2,15 +2,12 @@ use std::collections::{BTreeMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use eframe::epaint::{Color32, FontId};
-use egui::{CentralPanel, ScrollArea, SelectableLabel};
+use egui::{CentralPanel, ScrollArea, SelectableLabel, SidePanel, TopBottomPanel};
 use egui::text::LayoutJob;
 use egui_extras::{Size, StripBuilder};
 
-use crate::github::github_client::{Fetcher, GitHubApi, Repositories};
-use crate::github::pulls::PullRequest;
-use crate::github::repositories::Repo;
-use crate::github::teams::Team;
-use crate::github::workflows::{Workflow, WorkflowRun, WorkflowRuns};
+use crate::github::github_client::*;
+use crate::github::github_models::*;
 use crate::ui::table::Table;
 
 impl eframe::App for TemplateApp {
@@ -36,22 +33,17 @@ impl eframe::App for TemplateApp {
             blacklisted_repositories: _,
         } = self;
 
-        egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
+        TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
-                ui.label("Personal Access Token:");
+                ui.label("PAT").on_hover_text("Get your Personal Access Token from Github and select repo and workflow persmissions");
                 ui.add(egui::TextEdit::singleline(token).password(!*show_token));
-
-                if ui
-                    .add(SelectableLabel::new(*show_token, "👁"))
-                    .on_hover_text("Show/hide token")
-                    .clicked()
-                {
+                if ui.add(SelectableLabel::new(*show_token, "👁")).on_hover_text("Show/hide token").clicked() {
                     *show_token = !*show_token;
                 };
             });
         });
 
-        egui::SidePanel::left("side_panel").show(ctx, |ui| {
+        SidePanel::left("side_panel").show(ctx, |ui| {
             ui.vertical_centered(|ui| {
                 ui.heading("GitHub Status");
                 ui.group(|ui| {
@@ -139,7 +131,9 @@ impl eframe::App for TemplateApp {
                 }
                 State::Repositories => {
                     ui.heading("Repositories");
+
                     ui.horizontal_wrapped(|ui| {
+                        ui.label("Team");
                         if ui.text_edit_singleline(team_name).lost_focus() {
                             *team_name = team_name.to_string();
                             let _team = self.team.clone();
@@ -150,29 +144,22 @@ impl eframe::App for TemplateApp {
                             });
                         }
 
-                        if ui.button("Fetch async").clicked() {
-                            let _team = self.team.lock().unwrap().clone();
-                            let _blacklisted = self.blacklisted_repositories.lock().unwrap().clone();
-                            *self.repositories.lock().unwrap() = github.repositories(token, &_team)
-                                .block_and_take()
-                                .into_iter()
-                                .filter(|repo| !_blacklisted.contains(repo))
-                                .collect::<HashSet<Repo>>();
-                        }
-
                         if ui.button("Fetch").clicked() {
                             let _repositories = self.repositories.clone();
                             let _team = self.team.lock().unwrap().clone();
+                            let _blacklisted = self.blacklisted_repositories.lock().unwrap().clone();
                             github.fetch_url(token, format!("{}{}", &_team.repositories_url, "?per_page=100").as_str(), move |response| {
                                 if let Ok(repositories) = serde_json::from_slice::<HashSet<Repo>>(&response) {
-                                    *_repositories.lock().unwrap() = repositories;
+                                    *_repositories.lock().unwrap() = repositories.into_iter()
+                                        .filter(|repo| !_blacklisted.contains(repo))
+                                        .collect::<HashSet<Repo>>();
                                 }
                             });
                         }
                     });
 
                     ui.separator();
-                    ui.horizontal_wrapped(|ui| {
+                    ui.horizontal_top(|ui| {
                         ui.group(|ui| {
                             ui.vertical(|ui| {
                                 let _repos = self.repositories.lock().unwrap().clone();
@@ -181,15 +168,11 @@ impl eframe::App for TemplateApp {
 
                                 _repos.into_iter().for_each(|repo| {
                                     ui.horizontal_wrapped(|ui| {
-                                        let blacklist_button = LayoutJob::simple_singleline(
-                                            String::from("➡"),
-                                            FontId::default(),
-                                            Color32::LIGHT_RED,
-                                        );
+                                        let blacklist_button = LayoutJob::simple_singleline("➡".into(), FontId::default(), Color32::LIGHT_RED);
 
                                         if ui.button(blacklist_button).clicked() {
-                                            self.repositories.clone().lock().unwrap().remove(&repo);
-                                            self.blacklisted_repositories.clone().lock().unwrap().insert(repo.clone());
+                                            self.repositories.lock().unwrap().remove(&repo);
+                                            self.blacklisted_repositories.lock().unwrap().insert(repo.clone());
                                         };
 
                                         ui.label(&repo.name);
@@ -205,14 +188,10 @@ impl eframe::App for TemplateApp {
 
                                 _blacklisted_repos.into_iter().for_each(|repo| {
                                     ui.horizontal_wrapped(|ui| {
-                                        let whitelist_button = LayoutJob::simple_singleline(
-                                            String::from("⬅"),
-                                            FontId::default(),
-                                            Color32::LIGHT_GREEN,
-                                        );
+                                        let whitelist_button = LayoutJob::simple_singleline("⬅".into(), FontId::default(), Color32::LIGHT_GREEN);
 
                                         if ui.button(whitelist_button).clicked() {
-                                            self.repositories.clone().lock().unwrap().insert(repo.clone());
+                                            self.repositories.lock().unwrap().insert(repo.clone());
                                             self.blacklisted_repositories.clone().lock().unwrap().remove(&repo);
                                         };
 
@@ -223,6 +202,7 @@ impl eframe::App for TemplateApp {
                         });
                         ui.group(|ui| {
                             ui.vertical(|ui| {
+                                ui.heading("Team");
                                 ui.label(format!("{}", self.team.lock().unwrap().clone()))
                             });
                         });

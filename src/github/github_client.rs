@@ -1,41 +1,16 @@
-use std::collections::HashSet;
-
 use ehttp::Request;
-use poll_promise::Promise;
 
-use crate::github::pulls::PullRequest;
-use crate::github::repositories::Repo;
-use crate::github::teams::Team;
-use crate::github::workflows::{Workflow, WorkflowRun};
+const HOST: &str = "https://api.github.com";
 
 #[derive(Default)]
 pub struct GitHubApi {}
 
-pub trait Fetcher {
+pub trait Fetch {
     fn fetch_path(&self, token: &mut String, path: &str, callback: impl 'static + Send + FnOnce(Vec<u8>));
     fn fetch_url(&self, token: &mut String, url: &str, callback: impl 'static + Send + FnOnce(Vec<u8>));
 }
 
-pub trait Pulls {
-    fn pull_requests(&self, token: &mut String, repo: &str) -> Promise<HashSet<PullRequest>>;
-}
-
-pub trait Repositories {
-    fn repositories(&self, token: &mut String, team: &Team) -> Promise<HashSet<Repo>>;
-}
-
-pub trait Workflows {
-    fn workflows(&self, token: &mut String, repo: &str) -> Promise<HashSet<Workflow>>;
-    fn workflow_runs(&self, token: &mut String, repo: &str) -> Promise<HashSet<WorkflowRun>>;
-}
-
-pub trait Teams {
-    fn team(&self, name: &str, token: &str) -> Promise<Option<Team>>;
-}
-
-const HOST: &str = "https://api.github.com";
-
-impl Fetcher for GitHubApi {
+impl Fetch for GitHubApi {
     fn fetch_path(&self, token: &mut String, path: &str, callback: impl 'static + Send + FnOnce(Vec<u8>)) {
         self.fetch_url(token, &format!("{HOST}{path}"), callback);
     }

@@ -1,5 +1,2 @@
 pub mod github_client;
-pub mod pulls;
-pub mod repositories;
-pub mod teams;
-pub mod workflows;
+pub mod github_models;
