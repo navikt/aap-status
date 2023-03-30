@@ -17,7 +17,7 @@ pub struct Repo {
     pub name: String,
     full_name: String,
     html_url: String,
-    deployments_url: String,
+    pub deployments_url: String,
     // per_page=2 (dev,prod)
     releases_url: String,
     // per_page=1 (latest)
@@ -184,3 +184,26 @@ pub struct Actor {
     #[serde(rename = "type")]
     _type: String,
 }
+
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Deployment {
+    url: String,
+    pub id: i64,
+    node_id: String,
+    task: String,
+    pub environment: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub statuses_url: String,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Status {
+    url: String,
+    id: i64,
+    node_id: String,
+    pub state: String,
+    pub description: String,
+}
+

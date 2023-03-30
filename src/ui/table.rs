@@ -5,6 +5,7 @@ use eframe::epaint::text::LayoutJob;
 use egui::{Color32, Ui};
 use egui::util::hash;
 use egui_extras::{Column, TableBuilder};
+use itertools::Itertools;
 
 use crate::github::github_models::*;
 
@@ -44,6 +45,65 @@ impl Table {
                                 row.col(|ui| { ui.hyperlink_to(&pr.title.clone().unwrap_or_default(), &pr.html_url.clone().unwrap_or_default()); });
                                 row.col(|ui| { ui.label(&pr.updated_at.clone().unwrap_or_default()); });
                                 row.col(|ui| { ui.label(&pr.user.clone().unwrap_or_default().login); });
+                            });
+                        });
+                    }
+                });
+        });
+    }
+
+    pub fn deployments_ui(
+        &mut self,
+        ui: &mut Ui,
+        repo_to_deployments: &BTreeMap<String, HashSet<Deployment>>,
+        deployment_id_to_statuses: &BTreeMap<i64, HashSet<Status>>,
+    ) {
+        ui.push_id(hash("deployments"), |ui| {
+            let table = TableBuilder::new(ui)
+                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+                .column(Column::auto())
+                .column(Column::auto())
+                .column(Column::auto())
+                .column(Column::auto())
+                .column(Column::auto())
+                .column(Column::auto())
+                .min_scrolled_height(0.0);
+
+            table
+                .header(20.0, |mut header| {
+                    header.col(|ui| { ui.strong("Repo"); });
+                    header.col(|ui| { ui.strong("Environment"); });
+                    header.col(|ui| { ui.strong("Created"); });
+                    header.col(|ui| { ui.strong("Updated"); });
+                    header.col(|ui| { ui.strong("Status"); });
+                    header.col(|ui| { ui.strong("Description"); });
+                })
+                .body(|mut body| {
+                    for (name, deployments) in repo_to_deployments.iter() {
+                        deployments.iter().for_each(|deployment| {
+                            body.row(18.0, |mut row| {
+                                row.col(|ui| { ui.label(name); });
+                                row.col(|ui| { ui.label(&deployment.environment.clone()); });
+                                row.col(|ui| { ui.label(&deployment.created_at.clone()); });
+                                row.col(|ui| { ui.label(&deployment.updated_at.clone()); });
+
+                                if let Some(statuses) = deployment_id_to_statuses.get(&deployment.id) {
+                                    if let Some(status) = statuses.iter().find_or_first(|_|true) {
+                                        row.col(|ui| {
+                                            let color = match status.state.as_str() {
+                                                "success" => Color32::LIGHT_GREEN,
+                                                "in_progress" => Color32::LIGHT_BLUE,
+                                                "inactive" => Color32::LIGHT_GRAY,
+                                                "queued" => Color32::LIGHT_YELLOW,
+                                                "failure" => Color32::LIGHT_RED,
+                                                _ => Color32::LIGHT_YELLOW
+                                            };
+                                            let state = LayoutJob::simple_singleline(status.state.clone(), FontId::default(), color);
+                                            ui.label(state);
+                                        });
+                                        row.col(|ui| { ui.label(&status.description.clone()); });
+                                    }
+                                }
                             });
                         });
                     }

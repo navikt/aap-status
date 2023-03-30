@@ -5,6 +5,7 @@ use eframe::epaint::{Color32, FontId};
 use egui::{CentralPanel, ScrollArea, SelectableLabel, SidePanel, TextEdit, TopBottomPanel};
 use egui::text::LayoutJob;
 use egui_extras::{Size, StripBuilder};
+use itertools::Itertools;
 
 use crate::github::github_client::*;
 use crate::github::github_models::*;
@@ -35,12 +36,15 @@ impl eframe::App for Application {
             token,
             workflows_options,
             pr_table,
+            dp_table,
             run_table,
             panel,
             team_name,
             team: _,
             teams: _,
             pull_requests: _,
+            deployments: _,
+            deployment_statuses: _,
             workflows: _,
             workflow_runs: _,
             repositories: _,
@@ -63,6 +67,8 @@ impl eframe::App for Application {
                 ui.group(|ui| {
                     ui.separator();
                     if ui.button("  Pull Requests  ").clicked() { *panel = Panel::PullRequests }
+                    ui.separator();
+                    if ui.button("  Deployments  ").clicked() { *panel = Panel::Deployments }
                     ui.separator();
                     if ui.button("  Workflows  ").clicked() { *panel = Panel::WorkflowRuns }
                     ui.separator();
@@ -102,6 +108,63 @@ impl eframe::App for Application {
                             });
                         });
                 }
+
+                Panel::Deployments => {
+                    ui.heading("Deployments");
+                    ui.label("TODO: refresh statuses skal bli gjort som en del av refresh og sortering av statuser må bli riktig");
+
+                    ui.horizontal_wrapped(|ui| {
+                        if ui.button("Refresh").clicked() {
+                            self.deployments.lock().unwrap().clear();
+                            self.deployment_statuses.lock().unwrap().clear();
+                            let _repos = self.repositories.clone();
+
+                            _repos.lock().unwrap().clone().into_iter().for_each(|_repo| {
+                                let _deployments = self.deployments.clone();
+                                github.fetch_url(&mut token.value, &_repo.deployments_url.clone(), move |response| {
+                                    if let Ok(deployments) = serde_json::from_slice::<HashSet<Deployment>>(&response) {
+                                        *_deployments.lock().unwrap()
+                                            .entry(_repo.clone().name)
+                                            .or_insert(HashSet::default()) = deployments.into_iter()
+                                            .sorted_by(|dep, dep2| Ord::cmp(&dep.id, &dep2.id) )
+                                            .rev()
+                                            .take(2)
+                                            .collect::<HashSet<Deployment>>()
+                                    }
+                                });
+                            });
+                        }
+
+                        if ui.button("Refresh statuses").clicked() {
+                            let _deployments = self.deployments.clone();
+                            _deployments.lock().unwrap().clone().into_iter().for_each(|(_, deployments)| {
+                                deployments.into_iter().for_each(|deployment| {
+                                    let _deployment_statuses = self.deployment_statuses.clone();
+                                    github.fetch_url(&mut token.value, &deployment.statuses_url, move |res| {
+                                        if let Ok(statuses) = serde_json::from_slice::<HashSet<Status>>(&res) {
+                                            *_deployment_statuses.lock().unwrap()
+                                                .entry(deployment.id)
+                                                .or_insert(HashSet::default()) = statuses.into_iter()
+                                                .filter(|status| status.state != "inactive")
+                                                .collect();
+                                        }
+                                    });
+                                });
+                            });
+                        }
+                    });
+
+                    StripBuilder::new(ui)
+                        .size(Size::remainder().at_least(100.0))
+                        .vertical(|mut strip| {
+                            strip.cell(|ui| {
+                                ScrollArea::horizontal().show(ui, |ui| {
+                                    dp_table.deployments_ui(ui, &self.deployments.lock().unwrap(), &self.deployment_statuses.lock().unwrap());
+                                });
+                            });
+                        });
+                }
+
                 Panel::WorkflowRuns => {
                     ui.heading("Failed Workflows");
                     ui.horizontal_wrapped(|ui| {
@@ -233,9 +296,10 @@ impl eframe::App for Application {
 
 #[derive(PartialEq, serde::Deserialize, serde::Serialize)]
 enum Panel {
-    Repositories,
     PullRequests,
+    Deployments,
     WorkflowRuns,
+    Repositories,
 }
 
 impl Default for Panel {
@@ -287,6 +351,7 @@ pub struct Application {
     token: Token,
     workflows_options: WorkflowsOptions,
     pr_table: Table,
+    dp_table: Table,
     run_table: Table,
     panel: Panel,
     team_name: String,
@@ -294,6 +359,8 @@ pub struct Application {
     team: Arc<Mutex<Team>>,
     teams: Arc<Mutex<HashSet<Team>>>,
     pull_requests: Arc<Mutex<BTreeMap<String, HashSet<PullRequest>>>>,
+    deployments: Arc<Mutex<BTreeMap<String, HashSet<Deployment>>>>,
+    deployment_statuses: Arc<Mutex<BTreeMap<i64, HashSet<Status>>>>,
     workflows: Arc<Mutex<BTreeMap<String, HashSet<Workflow>>>>,
     workflow_runs: Arc<Mutex<BTreeMap<String, HashSet<WorkflowRun>>>>,
     repositories: Arc<Mutex<HashSet<Repo>>>,
