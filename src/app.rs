@@ -48,11 +48,11 @@ impl eframe::App for TemplateApp {
                 ui.heading("GitHub Status");
                 ui.group(|ui| {
                     ui.separator();
-                    if ui.button("Pull Requests").clicked() { *state = State::Pulls }
+                    if ui.button("  Pull Requests  ").clicked() { *state = State::Pulls }
                     ui.separator();
-                    if ui.button("Workflows").clicked() { *state = State::Runs }
+                    if ui.button("  Workflows  ").clicked() { *state = State::Runs }
                     ui.separator();
-                    if ui.button("Repositories").clicked() { *state = State::Repositories }
+                    if ui.button("  Repositories  ").clicked() { *state = State::Repositories }
                     ui.separator();
                 });
             });
