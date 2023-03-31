@@ -3,19 +3,19 @@ use ehttp::Request;
 const HOST: &str = "https://api.github.com";
 
 #[derive(Default)]
-pub struct GitHubApi {}
+pub struct GitHubApi;
 
 pub trait Fetch {
-    fn fetch_path(&self, token: &mut String, path: &str, callback: impl 'static + Send + FnOnce(Vec<u8>));
-    fn fetch_url(&self, token: &mut String, url: &str, callback: impl 'static + Send + FnOnce(Vec<u8>));
+    fn fetch_path(&self, token: &str, path: &str, callback: impl 'static + Send + FnOnce(Vec<u8>));
+    fn fetch_url(&self, token: &str, url: &str, callback: impl 'static + Send + FnOnce(Vec<u8>));
 }
 
 impl Fetch for GitHubApi {
-    fn fetch_path(&self, token: &mut String, path: &str, callback: impl 'static + Send + FnOnce(Vec<u8>)) {
+    fn fetch_path(&self, token: &str, path: &str, callback: impl 'static + Send + FnOnce(Vec<u8>)) {
         self.fetch_url(token, &format!("{HOST}{path}"), callback);
     }
 
-    fn fetch_url(&self, token: &mut String, url: &str, callback: impl 'static + Send + FnOnce(Vec<u8>)) {
+    fn fetch_url(&self, token: &str, url: &str, callback: impl 'static + Send + FnOnce(Vec<u8>)) {
         let request = Request {
             headers: ehttp::headers(&[
                 ("Accept", "application/vnd.github+json"),
@@ -26,8 +26,9 @@ impl Fetch for GitHubApi {
         };
 
         ehttp::fetch(request, |response| {
-            if let Ok(res) = response {
-                callback(res.bytes)
+            match response {
+                Ok(response) => callback(response.bytes),
+                Err(e) => eprintln!("error fetching: {}", e),
             }
         });
     }

@@ -1,177 +1,59 @@
-use std::collections::{BTreeMap, HashSet};
+use egui::Ui;
 
-use eframe::epaint::FontId;
-use eframe::epaint::text::LayoutJob;
-use egui::{Color32, Ui};
-use egui::util::hash;
-use egui_extras::{Column, TableBuilder};
-use itertools::Itertools;
-
-use crate::github::github_models::*;
-
-#[derive(Default, serde::Deserialize, serde::Serialize)]
-#[serde(default)]
-pub struct Table {
-    striped: bool,
+pub trait Table<T: Clone> {
+    fn render(&mut self, ui: &mut Ui, data: &T);
 }
 
-impl Table {
-    pub fn pull_requests_ui(
-        &mut self,
-        ui: &mut Ui,
-        pull_requests: &BTreeMap<String, HashSet<PullRequest>>,
-    ) {
-        ui.push_id(hash("pull_request"), |ui| {
-            let table = TableBuilder::new(ui)
-                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                .column(Column::auto())
-                .column(Column::auto())
-                .column(Column::auto())
-                .column(Column::auto())
-                .min_scrolled_height(0.0);
+#[derive(serde::Deserialize, serde::Serialize, Default, Clone)]
+pub struct Tables {
+    pull_requests: TableUI,
+    workflow_runs: TableUI,
+}
 
-            table
-                .header(20.0, |mut header| {
-                    header.col(|ui| { ui.strong("Repo"); });
-                    header.col(|ui| { ui.strong("Title"); });
-                    header.col(|ui| { ui.strong("Author"); });
-                    header.col(|ui| { ui.strong("Last Update"); });
-                })
-                .body(|mut body| {
-                    for (name, prs) in pull_requests.iter() {
-                        prs.iter().for_each(|pr| {
-                            body.row(18.0, |mut row| {
-                                row.col(|ui| { ui.label(name); });
-                                row.col(|ui| { ui.hyperlink_to(&pr.title.clone().unwrap_or_default(), &pr.html_url.clone().unwrap_or_default()); });
-                                row.col(|ui| { ui.label(&pr.updated_at.clone().unwrap_or_default()); });
-                                row.col(|ui| { ui.label(&pr.user.clone().unwrap_or_default().login); });
-                            });
-                        });
-                    }
-                });
-        });
+impl Tables {
+    pub fn pull_requests(&self) -> TableUI { self.pull_requests.clone() }
+    pub fn workflow_runs(&self) -> TableUI { self.workflow_runs.clone() }
+
+    pub fn show_pull_requests_runs(&self) -> bool { self.workflow_runs.show_prs }
+    pub fn show_successful_runs(&self) -> bool { self.workflow_runs.show_success }
+
+    pub fn toggle_show_workflow_success(&self) -> Self {
+        Tables {
+            workflow_runs: self.workflow_runs.toggle_success(),
+            ..self.clone()
+        }
     }
 
-    pub fn deployments_ui(
-        &mut self,
-        ui: &mut Ui,
-        repo_to_deployments: &BTreeMap<String, HashSet<Deployment>>,
-        deployment_id_to_statuses: &BTreeMap<i64, HashSet<Status>>,
-    ) {
-        ui.push_id(hash("deployments"), |ui| {
-            let table = TableBuilder::new(ui)
-                .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-                .column(Column::auto())
-                .column(Column::auto())
-                .column(Column::auto())
-                .column(Column::auto())
-                .column(Column::auto())
-                .column(Column::auto())
-                .min_scrolled_height(0.0);
+    pub fn toggle_show_workflow_pulls(&self) -> Self {
+        Tables {
+            workflow_runs: self.workflow_runs.toggle_prs(),
+            ..self.clone()
+        }
+    }
+}
 
-            table
-                .header(20.0, |mut header| {
-                    header.col(|ui| { ui.strong("Repo"); });
-                    header.col(|ui| { ui.strong("Environment"); });
-                    header.col(|ui| { ui.strong("Created"); });
-                    header.col(|ui| { ui.strong("Updated"); });
-                    header.col(|ui| { ui.strong("Status"); });
-                    header.col(|ui| { ui.strong("Description"); });
-                })
-                .body(|mut body| {
-                    for (name, deployments) in repo_to_deployments.iter() {
-                        deployments.iter().for_each(|deployment| {
-                            body.row(18.0, |mut row| {
-                                row.col(|ui| { ui.label(name); });
-                                row.col(|ui| { ui.label(&deployment.environment.clone()); });
-                                row.col(|ui| { ui.label(&deployment.created_at.clone()); });
-                                row.col(|ui| { ui.label(&deployment.updated_at.clone()); });
+#[derive(serde::Deserialize, serde::Serialize, Default, Clone)]
+#[serde(default)]
+pub struct TableUI {
+    show_prs: bool,
+    show_success: bool,
+}
 
-                                if let Some(statuses) = deployment_id_to_statuses.get(&deployment.id) {
-                                    if let Some(status) = statuses.iter().find_or_first(|_|true) {
-                                        row.col(|ui| {
-                                            let color = match status.state.as_str() {
-                                                "success" => Color32::LIGHT_GREEN,
-                                                "in_progress" => Color32::LIGHT_BLUE,
-                                                "inactive" => Color32::LIGHT_GRAY,
-                                                "queued" => Color32::LIGHT_YELLOW,
-                                                "failure" => Color32::LIGHT_RED,
-                                                _ => Color32::LIGHT_YELLOW
-                                            };
-                                            let state = LayoutJob::simple_singleline(status.state.clone(), FontId::default(), color);
-                                            ui.label(state);
-                                        });
-                                        row.col(|ui| { ui.label(&status.description.clone()); });
-                                    }
-                                }
-                            });
-                        });
-                    }
-                });
-        });
+impl TableUI {
+    pub fn is_show_pr(&self) -> bool { self.show_prs }
+    pub fn is_show_success(&self) -> bool { self.show_success }
+
+    pub fn toggle_success(&self) -> Self {
+        TableUI {
+            show_success: !self.show_success,
+            ..self.clone()
+        }
     }
 
-    pub fn workflow_runs_ui(
-        &mut self,
-        ui: &mut Ui,
-        show_prs: bool,
-        show_success: bool,
-        map_of_runs: &BTreeMap<String, HashSet<WorkflowRun>>,
-    ) {
-        let table = TableBuilder::new(ui)
-            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
-            .column(Column::auto())
-            .column(Column::auto())
-            .column(Column::auto())
-            .column(Column::auto())
-            .column(Column::auto())
-            .column(Column::auto())
-            .min_scrolled_height(0.0);
-
-        table
-            .header(20.0, |mut header| {
-                header.col(|ui| { ui.strong("Repo"); });
-                header.col(|ui| { ui.strong("Conclusion"); });
-                header.col(|ui| { ui.strong("Workflow"); });
-                header.col(|ui| { ui.strong("Event"); });
-                header.col(|ui| { ui.strong("Attempts"); });
-                header.col(|ui| { ui.strong("Timestamp"); });
-            })
-            .body(|mut body| {
-                for (repo_name, runs) in map_of_runs.iter() {
-                    let newest_workflow_runs = runs.iter()
-                        .fold(BTreeMap::new(), |mut acc: BTreeMap<i64, WorkflowRun>, next| {
-                            let existing_or_new = acc.entry(next.workflow_id).or_default();
-                            if next.id > existing_or_new.id {
-                                acc.insert(next.workflow_id, next.clone());
-                            }
-                            acc
-                        })
-                        .into_values();
-
-                    newest_workflow_runs
-                        .filter(|workflow_run| workflow_run.event.clone() != "pull_request" || show_prs)
-                        .filter(|workflow_run| workflow_run.conclusion.clone().unwrap_or_default() == "failure" || show_success)
-                        .for_each(|workflow_run| {
-                            body.row(18.0, |mut row| {
-                                row.col(|ui| { ui.label(repo_name); });
-                                row.col(|ui| {
-                                    let color = match &workflow_run.conclusion {
-                                        Some(conclusion) if conclusion == "failure" => Color32::LIGHT_RED,
-                                        _ => Color32::LIGHT_GREEN
-                                    };
-
-                                    let conclusion = LayoutJob::simple_singleline(workflow_run.conclusion.clone().unwrap_or_default(), FontId::default(), color);
-
-                                    ui.label(conclusion);
-                                });
-                                row.col(|ui| { ui.hyperlink_to(&workflow_run.name.clone().unwrap_or_default(), &workflow_run.html_url.clone()); });
-                                row.col(|ui| { ui.label(&workflow_run.event.clone()); });
-                                row.col(|ui| { ui.label(format!("{}", &workflow_run.run_attempt.clone())); });
-                                row.col(|ui| { ui.label(&workflow_run.run_started_at.clone().unwrap_or_default()); });
-                            });
-                        });
-                }
-            });
+    pub fn toggle_prs(&self) -> Self {
+        TableUI {
+            show_prs: !self.show_prs,
+            ..self.clone()
+        }
     }
 }

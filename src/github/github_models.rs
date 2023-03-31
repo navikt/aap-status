@@ -186,7 +186,7 @@ pub struct Actor {
 }
 
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 pub struct Deployment {
     url: String,
     pub id: i64,
@@ -196,14 +196,72 @@ pub struct Deployment {
     pub created_at: String,
     pub updated_at: String,
     pub statuses_url: String,
+    // #[serde(skip_serializing)]
+    // pub statuses: HashSet<Status>,
+}
+
+impl Hash for Deployment {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.id.hash(state)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Status {
     url: String,
-    id: i64,
+    pub id: i64,
     node_id: String,
-    pub state: String,
+    pub state: State,
     pub description: String,
 }
 
+#[derive(PartialEq, serde::Deserialize, serde::Serialize, Clone, Debug, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum State {
+    Error,
+    Failure,
+    Inactive,
+    Pending,
+    Success,
+    Queued,
+    InProgress,
+}
+
+impl Status {
+    pub fn colored_state(&self) -> egui::text::LayoutJob {
+        use eframe::epaint::Color32;
+        use eframe::epaint::FontId;
+
+        let color = match self.state {
+            State::Error => Color32::LIGHT_RED,
+            State::Failure => Color32::LIGHT_RED,
+            State::Inactive => Color32::LIGHT_GRAY,
+            State::Pending => Color32::LIGHT_BLUE,
+            State::Success => Color32::LIGHT_GREEN,
+            State::Queued => Color32::LIGHT_BLUE,
+            State::InProgress => Color32::LIGHT_RED
+        };
+
+        egui::text::LayoutJob::simple_singleline(
+            format!("{:?}", self.state.clone()),
+            FontId::default(),
+            color,
+        )
+    }
+}
+
+
+#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+pub struct Environments {
+    pub total_count: i32,
+    pub environments: HashSet<Environment>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Environment {
+    url: String,
+    pub id: i64,
+    node_id: String,
+    pub name: String,
+    pub html_url: String,
+}
