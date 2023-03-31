@@ -10,14 +10,14 @@ use crate::github::github_models::WorkflowRun;
 use crate::ui::table::{Table, TableUI};
 
 pub trait WorkflowPanel {
-    fn draw_workflows(&mut self, ui: &mut Ui, table: &mut TableUI, pull_requests: &BTreeMap<String, HashSet<WorkflowRun>>);
+    fn draw_workflows(&mut self, ui: &mut Ui, pull_requests: &BTreeMap<String, HashSet<WorkflowRun>>);
 }
 
 impl WorkflowPanel for PanelUI {
-    fn draw_workflows(&mut self, ui: &mut Ui, table: &mut TableUI, workflows: &BTreeMap<String, HashSet<WorkflowRun>>) {
+    fn draw_workflows(&mut self, ui: &mut Ui, workflows: &BTreeMap<String, HashSet<WorkflowRun>>) {
         StripBuilder::new(ui).size(Size::remainder().at_least(100.0)).vertical(|mut strip| strip.cell(|ui| {
             ScrollArea::horizontal().show(ui, |ui|
-                table.render(ui, workflows),
+                self.tables.workflow_runs().render(ui, workflows)
             );
         }));
     }

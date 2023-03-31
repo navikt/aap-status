@@ -9,16 +9,18 @@ use crate::github::github_models::PullRequest;
 use crate::ui::table::{Table, TableUI};
 
 pub trait PullRequestPanel {
-    fn draw_pull_requests(&mut self, ui: &mut Ui, table: &mut TableUI, pull_requests: &BTreeMap<String, HashSet<PullRequest>>);
+    fn draw_pull_requests(&mut self, ui: &mut Ui, data: &BTreeMap<String, HashSet<PullRequest>>);
 }
 
 impl PullRequestPanel for PanelUI {
-    fn draw_pull_requests(&mut self, ui: &mut Ui, table: &mut TableUI, pull_requests: &BTreeMap<String, HashSet<PullRequest>>) {
+    fn draw_pull_requests(&mut self, ui: &mut Ui, data: &BTreeMap<String, HashSet<PullRequest>>) {
         StripBuilder::new(ui)
             .size(Size::remainder().at_least(100.0))
             .vertical(|mut strip| strip.cell(|ui| {
                 ScrollArea::horizontal()
-                    .show(ui, |ui| table.render(ui, pull_requests));
+                    .show(ui, |ui| {
+                        self.tables.pull_requests().render(ui, data)
+                    });
             }));
     }
 }

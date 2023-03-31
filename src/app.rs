@@ -65,13 +65,21 @@ impl eframe::App for Application {
                 ui.heading("GitHub Status");
                 ui.group(|ui| {
                     ui.separator();
-                    if ui.button("  Pull Requests  ").clicked() { *panel = Panel::PullRequests(PanelUI::default()) }
+                    if ui.button("  Pull Requests  ").clicked() {
+                        *panel = Panel::PullRequests(PanelUI::create(tables));
+                    }
                     ui.separator();
-                    if ui.button("  Deployments  ").clicked() { *panel = Panel::Deployments(PanelUI::default()) }
+                    if ui.button("  Deployments  ").clicked() {
+                        *panel = Panel::Deployments(PanelUI::create(tables));
+                    }
                     ui.separator();
-                    if ui.button("  Workflows  ").clicked() { *panel = Panel::WorkflowRuns(PanelUI::default()) }
+                    if ui.button("  Workflows  ").clicked() {
+                        *panel = Panel::WorkflowRuns(PanelUI::create(tables));
+                    }
                     ui.separator();
-                    if ui.button("  Repositories  ").clicked() { *panel = Panel::Repositories(PanelUI::default()) }
+                    if ui.button("  Repositories  ").clicked() {
+                        *panel = Panel::Repositories(PanelUI::create(tables));
+                    }
                     ui.separator();
                 });
             });
@@ -97,11 +105,7 @@ impl eframe::App for Application {
                         });
                     }
 
-                    panel.draw_pull_requests(
-                        ui,
-                        &mut tables.pull_requests(),
-                        &self.pull_requests.lock().unwrap(),
-                    );
+                    panel.draw_pull_requests(ui, &self.pull_requests.lock().unwrap().clone());
                 }
 
                 Panel::Deployments(panel) => {
@@ -110,10 +114,7 @@ impl eframe::App for Application {
                     ui.horizontal_wrapped(|ui| {
                         if ui.button("Refresh").clicked() {
                             self.deployments.lock().unwrap().clear();
-                            self.deployment_statuses.lock().unwrap().clear();
-                            let _repos = self.repositories.clone();
-
-                            _repos.lock().unwrap().clone().into_iter().for_each(|_repo| {
+                            self.repositories.clone().lock().unwrap().clone().into_iter().for_each(|_repo| {
                                 let _deployments = self.deployments.clone();
                                 github.fetch_url(&token.value, &_repo.deployments_url.clone(), move |response| {
                                     if let Ok(deployments) = serde_json::from_slice::<HashSet<Deployment>>(&response) {
@@ -126,11 +127,10 @@ impl eframe::App for Application {
                         }
 
                         if ui.button("Refresh status").clicked() {
-                            let _deployments = self.deployments.clone();
-                            _deployments.lock().unwrap().clone().into_iter().for_each(|(_, deploys)| {
+                            self.deployment_statuses.lock().unwrap().clear();
+                            self.deployments.clone().lock().unwrap().clone().into_iter().for_each(|(_, deploys)| {
                                 deploys.into_iter().for_each(|deployment| {
                                     let _deployment_statuses = self.deployment_statuses.clone();
-
                                     github.fetch_url(&token.value, &deployment.statuses_url, move |response| {
                                         if let Ok(statuses) = serde_json::from_slice::<HashSet<Status>>(&response) {
                                             *_deployment_statuses.lock().unwrap()
@@ -144,25 +144,16 @@ impl eframe::App for Application {
 
                         if ui.button("Refresh environments").clicked() {
                             self.repository_envs.lock().unwrap().clear();
-                            let repositories = self.repositories.clone();
-                            repositories.lock().unwrap().clone().into_iter().for_each(|repository| {
-                                let repository_envs = self.repository_envs.clone();
-                                let envs_for_repo = repository_envs.lock().unwrap();
-                                match envs_for_repo.get(&repository.name) {
-                                    Some(envs) => println!("{} envs for {} already found", envs.len(), &repository.name),
-                                    None => {
-                                        let repository_envs = self.repository_envs.clone();
-                                        github.fetch_path(&token.value, &format!("/repos/navikt/{}/environments", repository.name), move |response| {
-                                            match serde_json::from_slice::<Environments>(&response) {
-                                                Ok(environments) => {
-                                                    *repository_envs.lock().unwrap()
-                                                        .entry(repository.clone().name)
-                                                        .or_insert(HashSet::default()) = environments.environments;
-                                                }
-                                                Err(e) => println!("efailed to fetch envs {}", e)
-                                            }
-                                        });
-                                    }
+                            self.repositories.clone().lock().unwrap().clone().into_iter().for_each(|repository| {
+                                if self.repository_envs.lock().unwrap().clone().get(&repository.name).is_none() {
+                                    let repository_envs = self.repository_envs.clone();
+                                    github.fetch_path(&token.value, &format!("/repos/navikt/{}/environments", repository.name), move |response| {
+                                        if let Ok(environments) = serde_json::from_slice::<Environments>(&response) {
+                                            *repository_envs.lock().unwrap()
+                                                .entry(repository.clone().name)
+                                                .or_insert(HashSet::default()) = environments.environments;
+                                        }
+                                    });
                                 }
                             });
                         }
@@ -182,11 +173,8 @@ impl eframe::App for Application {
                     ui.horizontal_wrapped(|ui| {
                         if ui.button("Refresh").clicked() {
                             self.workflow_runs.lock().unwrap().clear();
-                            let _repos = self.repositories.clone();
-
-                            _repos.lock().unwrap().clone().into_iter().for_each(|_repo| {
+                            self.repositories.clone().lock().unwrap().clone().into_iter().for_each(|_repo| {
                                 let _workflow_runs = self.workflow_runs.clone();
-
                                 github.fetch_path(&token.value, &format!("/repos/navikt/{}/actions/runs?per_page=15", _repo.name), move |response| {
                                     if let Ok(workflow_runs) = serde_json::from_slice::<WorkflowRuns>(&response) {
                                         *_workflow_runs.lock().unwrap()
@@ -208,7 +196,6 @@ impl eframe::App for Application {
 
                     panel.draw_workflows(
                         ui,
-                        &mut tables.workflow_runs(),
                         &self.workflow_runs.lock().unwrap().clone(),
                     );
                 }
@@ -302,7 +289,13 @@ impl eframe::App for Application {
 }
 
 #[derive(Default)]
-pub struct PanelUI;
+pub struct PanelUI {
+    pub tables: Tables,
+}
+
+impl PanelUI {
+    pub fn create(tables: &mut Tables) -> Self { PanelUI { tables: tables.clone() } }
+}
 
 pub enum Panel {
     PullRequests(PanelUI),
@@ -312,9 +305,7 @@ pub enum Panel {
 }
 
 impl Default for Panel {
-    fn default() -> Self {
-        Self::Repositories(PanelUI::default())
-    }
+    fn default() -> Self { Self::Repositories(PanelUI::default()) }
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Default, Clone)]

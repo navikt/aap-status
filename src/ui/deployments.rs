@@ -31,7 +31,9 @@ impl DeploymentPanel for PanelUI {
         ui.horizontal_top(|ui| {
             StripBuilder::new(ui).size(Size::remainder()).vertical(|mut strip| {
                 strip.cell(|ui| {
+                    // vertical_scroll("deploy-vertical", ui, |ui| {
                     ScrollArea::vertical().id_source(hash("deploy-vertical")).show(ui, |ui| {
+
                         StripBuilder::new(ui).size(Size::remainder()).vertical(|mut strip| {
                             strip.cell(|ui| {
                                 ScrollArea::horizontal().id_source(hash("deploy-horizontal")).show(ui, |ui| {
