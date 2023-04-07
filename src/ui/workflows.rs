@@ -1,20 +1,20 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
 use eframe::epaint::{Color32, FontId};
 use eframe::epaint::text::LayoutJob;
 use egui::{ScrollArea, Ui};
 use egui_extras::{Column, Size, StripBuilder, TableBuilder};
 
-use crate::app::PanelUI;
 use crate::github::github_models::WorkflowRun;
+use crate::ui::panels::PanelUI;
 use crate::ui::table::{Table, TableUI};
 
 pub trait WorkflowPanel {
-    fn draw_workflows(&mut self, ui: &mut Ui, pull_requests: &BTreeMap<String, HashSet<WorkflowRun>>);
+    fn draw_workflows(&mut self, ui: &mut Ui, pull_requests: &BTreeMap<String, Vec<WorkflowRun>>);
 }
 
 impl WorkflowPanel for PanelUI {
-    fn draw_workflows(&mut self, ui: &mut Ui, workflows: &BTreeMap<String, HashSet<WorkflowRun>>) {
+    fn draw_workflows(&mut self, ui: &mut Ui, workflows: &BTreeMap<String, Vec<WorkflowRun>>) {
         StripBuilder::new(ui).size(Size::remainder().at_least(100.0)).vertical(|mut strip| strip.cell(|ui| {
             ScrollArea::horizontal().show(ui, |ui|
                 self.tables.workflow_runs().render(ui, workflows)
@@ -23,8 +23,8 @@ impl WorkflowPanel for PanelUI {
     }
 }
 
-impl Table<BTreeMap<String, HashSet<WorkflowRun>>> for TableUI {
-    fn render(&mut self, ui: &mut Ui, data: &BTreeMap<String, HashSet<WorkflowRun>>) {
+impl Table<BTreeMap<String, Vec<WorkflowRun>>> for TableUI {
+    fn render(&mut self, ui: &mut Ui, data: &BTreeMap<String, Vec<WorkflowRun>>) {
         let table = TableBuilder::new(ui)
             .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
             .column(Column::auto())

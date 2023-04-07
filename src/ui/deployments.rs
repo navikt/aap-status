@@ -1,21 +1,21 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 
 use egui::{ScrollArea, Ui};
 use egui::util::hash;
 use egui_extras::{Size, StripBuilder};
 use itertools::Itertools;
 
-use crate::app::PanelUI;
 use crate::github::github_models::{Deployment, Environment, Repo, Status};
+use crate::ui::panels::PanelUI;
 
 pub trait DeploymentPanel {
     fn draw_deployments(
         &mut self,
         ui: &mut Ui,
-        repositories: &HashSet<Repo>,
-        deployments: &BTreeMap<String, HashSet<Deployment>>,
-        deployments_status: &BTreeMap<i64, HashSet<Status>>,
-        envs: &BTreeMap<String, HashSet<Environment>>,
+        repositories: &Vec<Repo>,
+        deployments: &BTreeMap<String, Vec<Deployment>>,
+        deployments_status: &BTreeMap<i64, Vec<Status>>,
+        envs: &BTreeMap<String, Vec<Environment>>,
     );
 }
 
@@ -23,10 +23,10 @@ impl DeploymentPanel for PanelUI {
     fn draw_deployments(
         &mut self,
         ui: &mut Ui,
-        repositories: &HashSet<Repo>,
-        deployments: &BTreeMap<String, HashSet<Deployment>>,
-        deployments_status: &BTreeMap<i64, HashSet<Status>>,
-        envs: &BTreeMap<String, HashSet<Environment>>,
+        repositories: &Vec<Repo>,
+        deployments: &BTreeMap<String, Vec<Deployment>>,
+        deployments_status: &BTreeMap<i64, Vec<Status>>,
+        envs: &BTreeMap<String, Vec<Environment>>,
     ) {
         ui.horizontal_top(|ui| {
             StripBuilder::new(ui).size(Size::remainder()).vertical(|mut strip| {

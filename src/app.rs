@@ -1,14 +1,12 @@
-use std::collections::{BTreeMap, HashSet};
+use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use eframe::epaint::{Color32, FontId};
 use egui::{CentralPanel, SelectableLabel, SidePanel, TextEdit, TopBottomPanel};
-use egui::text::LayoutJob;
 
 use crate::github::github_client::*;
 use crate::github::github_models::*;
 use crate::ui::deployments::DeploymentPanel;
-use crate::ui::pull_requests::PullRequestPanel;
+use crate::ui::panels::{Panel, Panels};
 use crate::ui::table::Tables;
 use crate::ui::workflows::WorkflowPanel;
 
@@ -33,29 +31,28 @@ impl eframe::App for Application {
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         let Self {
-            github,
+            // github,
             token,
             tables,
-            panel,
+            panels,
             team_name,
-            team: _,
             teams: _,
-            pull_requests: _,
             deployments: _,
             deployment_statuses: _,
             workflows: _,
             workflow_runs: _,
-            repositories: _,
             repository_envs: _,
-            blacklisted_repositories: _,
         } = self;
 
         TopBottomPanel::top("top_panel").show(ctx, |ui| {
             ui.horizontal_wrapped(|ui| {
                 ui.label("PAT").on_hover_text("Get your Personal Access Token from Github and select repo and workflow persmissions");
-                ui.add(TextEdit::singleline(&mut token.value).password(!token.show));
-                if ui.add(SelectableLabel::new(token.show, "👁")).on_hover_text("Show/hide token").clicked() {
-                    *token = token.toggle();
+                if (ui.add(TextEdit::singleline(token).password(!panels.github.token_visible))).lost_focus() {
+                    println!("token changed:{}", &token);
+                    panels.update_token(token.clone());
+                };
+                if ui.add(SelectableLabel::new(panels.github.token_visible, "👁")).on_hover_text("Show/hide token").clicked() {
+                    panels.github.toggle_token_visibility();
                 };
             });
         });
@@ -66,19 +63,19 @@ impl eframe::App for Application {
                 ui.group(|ui| {
                     ui.separator();
                     if ui.button("  Pull Requests  ").clicked() {
-                        *panel = Panel::PullRequests(PanelUI::create(tables));
+                        panels.selected = Panel::PullRequests
                     }
                     ui.separator();
                     if ui.button("  Deployments  ").clicked() {
-                        *panel = Panel::Deployments(PanelUI::create(tables));
+                        panels.selected = Panel::Deployments;
                     }
                     ui.separator();
                     if ui.button("  Workflows  ").clicked() {
-                        *panel = Panel::WorkflowRuns(PanelUI::create(tables));
+                        panels.selected = Panel::WorkflowRuns;
                     }
                     ui.separator();
                     if ui.button("  Repositories  ").clicked() {
-                        *panel = Panel::Repositories(PanelUI::create(tables));
+                        panels.selected = Panel::Repositories;
                     }
                     ui.separator();
                 });
@@ -86,41 +83,33 @@ impl eframe::App for Application {
         });
 
         CentralPanel::default().show(ctx, |ui| {
-            match panel {
-                Panel::PullRequests(panel) => {
+            match panels.selected {
+                Panel::PullRequests => {
                     ui.heading("Pull Requests");
                     if ui.button("Refresh").clicked() {
-                        self.pull_requests.lock().unwrap().clear();
-                        let _repos = self.repositories.clone();
+                        panels.clear_pull_requests();
 
-                        _repos.lock().unwrap().clone().into_iter().for_each(|_repo| {
-                            let _pulls = self.pull_requests.clone();
-                            github.fetch_path(&token.value, &format!("/repos/navikt/{}/pulls", _repo.name), move |response| {
-                                if let Ok(pull_requests) = serde_json::from_slice::<HashSet<PullRequest>>(&response) {
-                                    *_pulls.lock().unwrap()
-                                        .entry(_repo.clone().name)
-                                        .or_insert(HashSet::default()) = pull_requests;
-                                }
-                            });
-                        });
+                        panels.repositories()
+                            .into_iter()
+                            .for_each(|repo| panels.add_pull_requests_for_repo(repo.name))
                     }
 
-                    panel.draw_pull_requests(ui, &self.pull_requests.lock().unwrap().clone());
+                    panels.paint_pull_requests(ui);
                 }
 
-                Panel::Deployments(panel) => {
+                Panel::Deployments => {
                     ui.heading("Deployments");
 
                     ui.horizontal_wrapped(|ui| {
                         if ui.button("Refresh").clicked() {
                             self.deployments.lock().unwrap().clear();
-                            self.repositories.clone().lock().unwrap().clone().into_iter().for_each(|_repo| {
+                            panels.repositories().into_iter().for_each(|_repo| {
                                 let _deployments = self.deployments.clone();
-                                github.fetch_url(&token.value, &_repo.deployments_url.clone(), move |response| {
-                                    if let Ok(deployments) = serde_json::from_slice::<HashSet<Deployment>>(&response) {
+                                panels.github.fetch_url(&_repo.deployments_url.clone(), move |response| {
+                                    if let Ok(deployments) = serde_json::from_slice::<Vec<Deployment>>(&response) {
                                         *_deployments.lock().unwrap()
                                             .entry(_repo.clone().name)
-                                            .or_insert(HashSet::default()) = deployments
+                                            .or_insert(Vec::default()) = deployments
                                     }
                                 });
                             });
@@ -131,11 +120,11 @@ impl eframe::App for Application {
                             self.deployments.clone().lock().unwrap().clone().into_iter().for_each(|(_, deploys)| {
                                 deploys.into_iter().for_each(|deployment| {
                                     let _deployment_statuses = self.deployment_statuses.clone();
-                                    github.fetch_url(&token.value, &deployment.statuses_url, move |response| {
-                                        if let Ok(statuses) = serde_json::from_slice::<HashSet<Status>>(&response) {
+                                    panels.github.fetch_url(&deployment.statuses_url, move |response| {
+                                        if let Ok(statuses) = serde_json::from_slice::<Vec<Status>>(&response) {
                                             *_deployment_statuses.lock().unwrap()
                                                 .entry(deployment.id)
-                                                .or_insert(HashSet::default()) = statuses
+                                                .or_insert(Vec::default()) = statuses
                                         }
                                     });
                                 })
@@ -144,14 +133,14 @@ impl eframe::App for Application {
 
                         if ui.button("Refresh environments").clicked() {
                             self.repository_envs.lock().unwrap().clear();
-                            self.repositories.clone().lock().unwrap().clone().into_iter().for_each(|repository| {
+                            panels.repositories().into_iter().for_each(|repository| {
                                 if self.repository_envs.lock().unwrap().clone().get(&repository.name).is_none() {
                                     let repository_envs = self.repository_envs.clone();
-                                    github.fetch_path(&token.value, &format!("/repos/navikt/{}/environments", repository.name), move |response| {
+                                    panels.github.fetch_path(&format!("/repos/navikt/{}/environments", repository.name), move |response| {
                                         if let Ok(environments) = serde_json::from_slice::<Environments>(&response) {
                                             *repository_envs.lock().unwrap()
                                                 .entry(repository.clone().name)
-                                                .or_insert(HashSet::default()) = environments.environments;
+                                                .or_insert(Vec::default()) = environments.environments;
                                         }
                                     });
                                 }
@@ -159,27 +148,27 @@ impl eframe::App for Application {
                         }
                     });
 
-                    panel.draw_deployments(
+                    panels.others.draw_deployments(
                         ui,
-                        &self.repositories.clone().lock().unwrap(),
+                        &panels.repositories(),
                         &self.deployments.clone().lock().unwrap(),
                         &self.deployment_statuses.clone().lock().unwrap(),
                         &self.repository_envs.clone().lock().unwrap(),
                     );
                 }
 
-                Panel::WorkflowRuns(panel) => {
+                Panel::WorkflowRuns => {
                     ui.heading("Failed Workflows");
                     ui.horizontal_wrapped(|ui| {
                         if ui.button("Refresh").clicked() {
                             self.workflow_runs.lock().unwrap().clear();
-                            self.repositories.clone().lock().unwrap().clone().into_iter().for_each(|_repo| {
+                            panels.repositories().into_iter().for_each(|_repo| {
                                 let _workflow_runs = self.workflow_runs.clone();
-                                github.fetch_path(&token.value, &format!("/repos/navikt/{}/actions/runs?per_page=15", _repo.name), move |response| {
+                                panels.github.fetch_path(&format!("/repos/navikt/{}/actions/runs?per_page=15", _repo.name), move |response| {
                                     if let Ok(workflow_runs) = serde_json::from_slice::<WorkflowRuns>(&response) {
                                         *_workflow_runs.lock().unwrap()
                                             .entry(_repo.clone().name)
-                                            .or_insert(HashSet::default()) = workflow_runs.workflow_runs;
+                                            .or_insert(Vec::default()) = workflow_runs.workflow_runs;
                                     }
                                 });
                             });
@@ -194,89 +183,25 @@ impl eframe::App for Application {
                         };
                     });
 
-                    panel.draw_workflows(
+                    panels.others.draw_workflows(
                         ui,
                         &self.workflow_runs.lock().unwrap().clone(),
                     );
                 }
-                Panel::Repositories(_) => {
+                Panel::Repositories => {
                     ui.heading("Repositories");
-
                     ui.horizontal_wrapped(|ui| {
                         ui.label("Team");
                         if ui.text_edit_singleline(team_name).lost_focus() {
                             *team_name = team_name.to_string();
-                            let _team = self.team.clone();
-                            github.fetch_path(&token.value, &format!("/orgs/navikt/teams/{}", &team_name), move |response| {
-                                if let Ok(team) = serde_json::from_slice::<Team>(&response) {
-                                    *_team.lock().unwrap() = team;
-                                }
-                            });
+                            panels.select_team(team_name.clone());
                         }
-
                         if ui.button("Fetch").clicked() {
-                            let _repositories = self.repositories.clone();
-                            let _team = self.team.lock().unwrap().clone();
-                            let _blacklisted = self.blacklisted_repositories.lock().unwrap().clone();
-                            github.fetch_url(&token.value, format!("{}{}", &_team.repositories_url, "?per_page=100").as_str(), move |response| {
-                                if let Ok(repositories) = serde_json::from_slice::<HashSet<Repo>>(&response) {
-                                    *_repositories.lock().unwrap() = repositories.into_iter()
-                                        .filter(|repo| !_blacklisted.contains(repo))
-                                        .collect::<HashSet<Repo>>();
-                                }
-                            });
+                            panels.find_repositories();
                         }
                     });
-
                     ui.separator();
-                    ui.horizontal_top(|ui| {
-                        ui.group(|ui| {
-                            ui.vertical(|ui| {
-                                let _repos = self.repositories.lock().unwrap().clone();
-
-                                ui.heading(format!("Selected: {}", &_repos.len()));
-
-                                _repos.into_iter().for_each(|repo| {
-                                    ui.horizontal_wrapped(|ui| {
-                                        let blacklist_button = LayoutJob::simple_singleline("➡".into(), FontId::default(), Color32::LIGHT_RED);
-
-                                        if ui.button(blacklist_button).clicked() {
-                                            self.repositories.lock().unwrap().remove(&repo);
-                                            self.blacklisted_repositories.lock().unwrap().insert(repo.clone());
-                                        };
-
-                                        ui.label(&repo.name);
-                                    });
-                                });
-                            });
-                        });
-                        ui.group(|ui| {
-                            ui.vertical(|ui| {
-                                let _blacklisted_repos = self.blacklisted_repositories.lock().unwrap().clone();
-
-                                ui.heading(format!("Blacklisted: {}", _blacklisted_repos.len()));
-
-                                _blacklisted_repos.into_iter().for_each(|repo| {
-                                    ui.horizontal_wrapped(|ui| {
-                                        let whitelist_button = LayoutJob::simple_singleline("⬅".into(), FontId::default(), Color32::LIGHT_GREEN);
-
-                                        if ui.button(whitelist_button).clicked() {
-                                            self.repositories.lock().unwrap().insert(repo.clone());
-                                            self.blacklisted_repositories.clone().lock().unwrap().remove(&repo);
-                                        };
-
-                                        ui.label(&repo.name);
-                                    });
-                                });
-                            });
-                        });
-                        ui.group(|ui| {
-                            ui.vertical(|ui| {
-                                ui.heading("Team");
-                                ui.label(format!("{}", self.team.lock().unwrap().clone()))
-                            });
-                        });
-                    });
+                    panels.paint_repositories(ui);
                 }
             };
         });
@@ -288,59 +213,17 @@ impl eframe::App for Application {
     }
 }
 
-#[derive(Default)]
-pub struct PanelUI {
-    pub tables: Tables,
-}
-
-impl PanelUI {
-    pub fn create(tables: &mut Tables) -> Self { PanelUI { tables: tables.clone() } }
-}
-
-pub enum Panel {
-    PullRequests(PanelUI),
-    Deployments(PanelUI),
-    WorkflowRuns(PanelUI),
-    Repositories(PanelUI),
-}
-
-impl Default for Panel {
-    fn default() -> Self { Self::Repositories(PanelUI::default()) }
-}
-
-#[derive(serde::Deserialize, serde::Serialize, Default, Clone)]
-struct Token {
-    value: String,
-    show: bool,
-}
-
-impl Token {
-    fn toggle(&self) -> Self {
-        Token {
-            show: !self.show,
-            ..self.clone()
-        }
-    }
-}
-
 #[derive(serde::Deserialize, serde::Serialize, Default)]
 #[serde(default)]
 pub struct Application {
-    #[serde(skip)]
-    github: GitHubApi,
-    token: Token,
+    token: String,
     tables: Tables,
-    #[serde(skip)]
-    panel: Panel,
+    panels: Panels,
     team_name: String,
-    team: Arc<Mutex<Team>>,
-    teams: Arc<Mutex<HashSet<Team>>>,
-    pull_requests: Arc<Mutex<BTreeMap<String, HashSet<PullRequest>>>>,
-    deployments: Arc<Mutex<BTreeMap<String, HashSet<Deployment>>>>,
-    deployment_statuses: Arc<Mutex<BTreeMap<i64, HashSet<Status>>>>,
-    workflows: Arc<Mutex<BTreeMap<String, HashSet<Workflow>>>>,
-    workflow_runs: Arc<Mutex<BTreeMap<String, HashSet<WorkflowRun>>>>,
-    repositories: Arc<Mutex<HashSet<Repo>>>,
-    repository_envs: Arc<Mutex<BTreeMap<String, HashSet<Environment>>>>,
-    blacklisted_repositories: Arc<Mutex<HashSet<Repo>>>,
+    teams: Arc<Mutex<Vec<Team>>>,
+    deployments: Arc<Mutex<BTreeMap<String, Vec<Deployment>>>>,
+    deployment_statuses: Arc<Mutex<BTreeMap<i64, Vec<Status>>>>,
+    workflows: Arc<Mutex<BTreeMap<String, Vec<Workflow>>>>,
+    workflow_runs: Arc<Mutex<BTreeMap<String, Vec<WorkflowRun>>>>,
+    repository_envs: Arc<Mutex<BTreeMap<String, Vec<Environment>>>>,
 }

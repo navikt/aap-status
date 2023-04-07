@@ -1,6 +1,4 @@
-use std::collections::HashSet;
 use std::fmt::Formatter;
-use std::hash::{Hash, Hasher};
 
 use serde::{Deserialize, Serialize};
 
@@ -11,77 +9,50 @@ enum DataOrEmpty<T> {
     Empty {},
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Hash)]
+#[derive(Deserialize, Serialize, Clone, Eq, PartialEq)]
 pub struct Repo {
     id: i64,
     pub name: String,
     full_name: String,
     html_url: String,
     pub deployments_url: String,
-    // per_page=2 (dev,prod)
     releases_url: String,
-    // per_page=1 (latest)
     pulls_url: String,
-    // remove suffix {/number}
     description: Option<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
-pub struct PullsResponse {
-    pub pull_requests: HashSet<PullRequest>,
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct PullRequests {
+    pub prs: Vec<PullRequest>
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Serialize, Deserialize, Clone, Default, Eq, PartialEq, Hash)]
 pub struct PullRequest {
-    id: i32,
-    number: i32,
-    url: String,
-    head: Head,
-    base: Base,
+    id: i64,
+    number: i64,
+    pub url: String,
     pub html_url: Option<String>,
     pub title: Option<String>,
-    body: Option<String>,
+    // body: Option<String>,
     state: Option<String>,
     pub user: Option<User>,
     created_at: Option<String>,
     pub updated_at: Option<String>,
 }
 
-impl Hash for PullRequest {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id.hash(state)
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Serialize, Deserialize, Clone, Default, Eq, PartialEq, Hash)]
 pub struct User {
     pub login: String,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub struct Base {
-    #[serde(rename = "ref")]
-    _ref: String,
-    sha: String,
-    repo: RepoMeta,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Default)]
-pub struct Head {
-    #[serde(rename = "ref")]
-    _ref: String,
-    sha: String,
-    repo: RepoMeta,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 pub struct RepoMeta {
     id: i64,
     url: String,
     name: String,
 }
 
-#[derive(Deserialize, Serialize, Clone, PartialEq, Eq, Hash, Default)]
+#[derive(Deserialize, Serialize, Clone, Default)]
 pub struct Team {
     pub name: String,
     id: i64,
@@ -105,13 +76,13 @@ impl std::fmt::Display for Team {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone)]
 struct WorkflowsResponse {
     pub total_count: i32,
-    pub workflows: HashSet<Workflow>,
+    pub workflows: Vec<Workflow>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Workflow {
     pub id: i64,
     pub node_id: String,
@@ -120,19 +91,13 @@ pub struct Workflow {
     pub state: String,
 }
 
-impl Hash for Workflow {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id.hash(state)
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 pub struct WorkflowRuns {
     pub total_count: i32,
-    pub workflow_runs: HashSet<WorkflowRun>,
+    pub workflow_runs: Vec<WorkflowRun>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Serialize, Deserialize, Clone, Default)]
 pub struct WorkflowRun {
     pub id: i64,
     pub name: Option<String>,
@@ -148,7 +113,7 @@ pub struct WorkflowRun {
     pub workflow_id: i64,
     url: String,
     pub html_url: String,
-    pull_requests: HashSet<PullRequest>,
+    pull_requests: Vec<PullRequest>,
     created_at: String,
     updated_at: String,
     actor: Option<Actor>,
@@ -164,13 +129,7 @@ pub struct WorkflowRun {
     display_title: String,
 }
 
-impl Hash for WorkflowRun {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id.hash(state)
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Actor {
     name: Option<String>,
     email: Option<String>,
@@ -186,7 +145,7 @@ pub struct Actor {
 }
 
 
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Deployment {
     url: String,
     pub id: i64,
@@ -196,17 +155,9 @@ pub struct Deployment {
     pub created_at: String,
     pub updated_at: String,
     pub statuses_url: String,
-    // #[serde(skip_serializing)]
-    // pub statuses: HashSet<Status>,
 }
 
-impl Hash for Deployment {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.id.hash(state)
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Status {
     url: String,
     pub id: i64,
@@ -215,7 +166,7 @@ pub struct Status {
     pub description: String,
 }
 
-#[derive(PartialEq, serde::Deserialize, serde::Serialize, Clone, Debug, Eq, Hash)]
+#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub enum State {
     Error,
@@ -251,13 +202,13 @@ impl Status {
 }
 
 
-#[derive(Serialize, Deserialize, Debug, Clone, Eq, PartialEq)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Environments {
     pub total_count: i32,
-    pub environments: HashSet<Environment>,
+    pub environments: Vec<Environment>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Environment {
     url: String,
     pub id: i64,
