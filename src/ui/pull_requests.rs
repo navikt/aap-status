@@ -4,27 +4,31 @@ use std::vec::IntoIter;
 
 use egui::{ScrollArea, Ui};
 use egui::util::hash;
-use egui_extras::{Size, StripBuilder, TableBuilder};
+use egui_extras::{Column, Size, StripBuilder, TableBuilder};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use crate::github::github_client::{Fetch, GitHubApi};
-use crate::github::github_models;
-use crate::ui::table::StatusTable;
+use crate::github;
+use crate::github::{github_models, HOST};
+use crate::github::github_models::Repo;
 
-#[derive(Default, Clone)]
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize, Default)]
 pub struct PullRequestsPanel {
+    repositories: Vec<Repo>,
     pull_requests: Arc<Mutex<Vec<PullRequest>>>,
 }
 
 impl PullRequestsPanel {
-    pub fn clear_pull_requests(&self) {
+    fn clear_pull_requests(&self) {
         self.pull_requests.lock().unwrap().clear()
     }
 
     fn pull_requests(&self) -> IntoIter<PullRequest> {
         self.pull_requests.lock().unwrap().clone().into_iter()
+    }
+
+    fn repositories(&self) -> IntoIter<Repo> {
+        self.repositories.clone().into_iter()
     }
 }
 
@@ -52,7 +56,29 @@ impl PullRequest {
 }
 
 impl PullRequestsPanel {
-    pub fn paint(&self, ui: &mut Ui) {
+    pub fn set_repos(&mut self, repos: Vec<Repo>) {
+        self.repositories = repos
+    }
+
+    pub fn paint(&self, ui: &mut Ui, token: &str) {
+        ui.heading("Pull Requests");
+
+        if ui.button("Refresh").clicked() {
+            self.clear_pull_requests();
+            self.repositories().for_each(|repo| {
+                let _pulls = self.pull_requests.clone();
+                github::fetch_lifetime::<HashSet<github_models::PullRequest>>(token, &format!("{}/repos/navikt/{}/pulls", HOST, &repo.name), move |response| {
+                    if let Ok(pull_requests) = response {
+                        let pull_request = pull_requests.into_iter()
+                            .map(|pr| PullRequest::parse(repo.clone().name, pr))
+                            .collect_vec();
+
+                        _pulls.lock().unwrap().extend(pull_request);
+                    }
+                });
+            })
+        }
+
         StripBuilder::new(ui).size(Size::remainder().at_least(100.0)).vertical(|mut strip| strip.cell(|ui| {
             ScrollArea::horizontal().show(ui, |ui| {
                 ui.push_id(hash("pull_request"), |ui| {
@@ -70,20 +96,27 @@ impl PullRequestsPanel {
             });
         }));
     }
+}
 
-    pub fn fetch(&self, repo: String, github: GitHubApi) {
-        let _pulls = self.pull_requests.clone();
-        github.fetch_path(&format!("/repos/navikt/{}/pulls", repo), move |response| {
-            match serde_json::from_slice::<HashSet<github_models::PullRequest>>(&response) {
-                Err(error) => eprintln!("error: {}", error),
-                Ok(response) => {
-                    let pull_request = response.into_iter()
-                        .map(|pr| PullRequest::parse(repo.clone(), pr))
-                        .collect_vec();
+pub trait StatusTable {
+    fn create<'b>(ui: &'b mut Ui, columns: Vec<&'b str>) -> egui_extras::Table<'b>;
+}
 
-                    _pulls.lock().unwrap().extend(pull_request);
-                }
-            }
-        });
+impl StatusTable for TableBuilder<'_> {
+    fn create<'b>(ui: &'b mut Ui, columns: Vec<&'b str>) -> egui_extras::Table<'b> {
+        let mut table_builder = TableBuilder::new(ui)
+            .cell_layout(egui::Layout::left_to_right(egui::Align::Center))
+            .min_scrolled_height(0.0);
+
+        for _ in 0..columns.len() {
+            table_builder = table_builder.column(Column::auto())
+        }
+
+        table_builder
+            .header(20.0, |mut header| {
+                columns.into_iter().for_each(|column| {
+                    header.col(|ui| { ui.strong(column); });
+                })
+            })
     }
 }

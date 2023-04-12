@@ -1,77 +1,45 @@
 use egui::Ui;
-use crate::github::github_client::GitHubApi;
-use crate::github::github_models::Repo;
+
+use crate::ui::deployments::DeploymentPanel;
 use crate::ui::pull_requests::PullRequestsPanel;
 use crate::ui::repositories::RepositoriesPanel;
-use crate::ui::table::Tables;
+use crate::ui::workflows::WorkflowPanel;
 
-#[derive(Default, Clone)]
-#[derive(serde::Deserialize, serde::Serialize)]
-pub struct PanelUI {
-    pub tables: Tables,
-}
-
-#[derive(Clone)]
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize, Default)]
 pub enum Panel {
     PullRequests,
     Deployments,
     WorkflowRuns,
+    #[default]
     Repositories,
 }
 
-#[derive(Clone)]
-#[derive(serde::Deserialize, serde::Serialize)]
+#[derive(serde::Deserialize, serde::Serialize, Default)]
 pub struct Panels {
     pub selected: Panel,
-    pub github: GitHubApi,
-    pull_requests: PullRequestsPanel,
-    repositories: RepositoriesPanel,
-    pub others: PanelUI,
+    pr_panel: PullRequestsPanel,
+    repo_panel: RepositoriesPanel,
+    deployment_panel: DeploymentPanel,
+    workflow_panel: WorkflowPanel,
 }
 
 impl Panels {
-    pub fn update_token(&mut self, token: String) {
-        self.github.update_token(token)
+    pub fn paint_repositories(&mut self, ui: &mut Ui, token: &str) {
+        self.repo_panel.paint(ui, token);
     }
 
-    pub fn add_pull_requests_for_repo(&self, repo_name: String) {
-        self.pull_requests.fetch(repo_name, self.github.clone())
+    pub fn paint_pull_requests(&mut self, ui: &mut Ui, token: &str) {
+        self.pr_panel.set_repos(self.repo_panel.repos());
+        self.pr_panel.paint(ui, token);
     }
 
-    pub fn paint_pull_requests(&self, ui: &mut Ui) {
-        self.pull_requests.paint(ui)
+    pub fn paint_deployments(&mut self, ui: &mut Ui, token: &str) {
+        self.deployment_panel.set_repos(self.repo_panel.repos());
+        self.deployment_panel.paint(ui, token);
     }
 
-    pub fn paint_repositories(&self, ui: &mut Ui) {
-        self.repositories.paint(ui)
-    }
-
-    pub fn clear_pull_requests(&self) {
-        self.pull_requests.clear_pull_requests()
-    }
-
-    pub fn repositories(&self) -> Vec<Repo> {
-        self.repositories.repositories()
-    }
-
-    pub fn select_team(&self, team_name: String) {
-        self.repositories.fetch_team(team_name, self.github.clone())
-    }
-
-    pub fn find_repositories(&self) {
-        self.repositories.fetch(self.github.clone())
-    }
-}
-
-impl Default for Panels {
-    fn default() -> Self {
-        Panels {
-            selected: Panel::Repositories,
-            github: GitHubApi::default(),
-            pull_requests: PullRequestsPanel::default(),
-            repositories: RepositoriesPanel::default(),
-            others: PanelUI::default(),
-        }
+    pub fn paint_workflows(&mut self, ui: &mut Ui, token: &str) {
+        self.workflow_panel.set_repos(self.repo_panel.repos());
+        self.workflow_panel.paint(ui, token);
     }
 }

@@ -208,7 +208,7 @@ pub struct Environments {
     pub environments: Vec<Environment>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub struct Environment {
     url: String,
     pub id: i64,
