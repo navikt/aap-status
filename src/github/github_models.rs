@@ -33,7 +33,6 @@ pub struct PullRequest {
     pub url: String,
     pub html_url: Option<String>,
     pub title: Option<String>,
-    // body: Option<String>,
     state: Option<String>,
     pub user: Option<User>,
     created_at: Option<String>,
@@ -179,6 +178,13 @@ pub enum State {
 }
 
 impl Status {
+    pub fn description(&self) -> String {
+        match self.state {
+            State::Success => String::default(),
+            _=> self.description.clone()
+        }
+    }
+
     pub fn colored_state(&self) -> egui::text::LayoutJob {
         use eframe::epaint::Color32;
         use eframe::epaint::FontId;

@@ -1,6 +1,6 @@
 use egui::{CentralPanel, SelectableLabel, SidePanel, TextEdit, TopBottomPanel};
 
-use crate::ui::panels::{Panel, Panels};
+use crate::ui::panels::{SelectedPanel, Panels};
 
 impl Application {
     /// Called once before the first frame.
@@ -42,33 +42,39 @@ impl eframe::App for Application {
             ui.vertical_centered(|ui| {
                 ui.heading("GitHub Status");
                 ui.group(|ui| {
-                    ui.separator();
-                    if ui.button("  Pull Requests  ").clicked() {
-                        panels.selected = Panel::PullRequests
-                    }
-                    ui.separator();
-                    if ui.button("  Deployments  ").clicked() {
-                        panels.selected = Panel::Deployments;
-                    }
-                    ui.separator();
-                    if ui.button("  Workflows  ").clicked() {
-                        panels.selected = Panel::WorkflowRuns;
-                    }
-                    ui.separator();
+
                     if ui.button("  Repositories  ").clicked() {
-                        panels.selected = Panel::Repositories;
+                        panels.selected = SelectedPanel::Repositories;
                     }
                     ui.separator();
+
+
+                    ui.separator();
+                    if ui.button("  Pull Requests ").clicked() {
+                        panels.selected = SelectedPanel::PullRequests
+                    }
+
+                    ui.separator();
+                    if ui.button("   Deployments  ").clicked() {
+                        panels.selected = SelectedPanel::Deployments;
+                    }
+
+                    ui.separator();
+                    if ui.button("    Workflows   ").clicked() {
+                        panels.selected = SelectedPanel::WorkflowRuns;
+                    }
+                    ui.separator();
+
                 });
             });
         });
 
         CentralPanel::default().show(ctx, |ui| {
             match panels.selected {
-                Panel::PullRequests => panels.paint_pull_requests(ui, token),
-                Panel::Deployments => panels.paint_deployments(ui, token),
-                Panel::WorkflowRuns => panels.paint_workflows(ui, token),
-                Panel::Repositories => panels.paint_repositories(ui, token)
+                SelectedPanel::PullRequests => panels.paint_pull_requests(ui, token),
+                SelectedPanel::Deployments => panels.paint_deployments(ui, token),
+                SelectedPanel::WorkflowRuns => panels.paint_workflows(ui, token),
+                SelectedPanel::Repositories => panels.paint_repositories(ui, token)
             };
         });
     }
