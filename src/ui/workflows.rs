@@ -1,8 +1,7 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use eframe::epaint::{Color32, FontId};
-use eframe::epaint::text::LayoutJob;
+use eframe::epaint::Color32;
 use egui::{SelectableLabel, Ui};
 use egui_extras::TableBuilder;
 
@@ -60,19 +59,18 @@ impl Panel for WorkflowPanel {
 
                         newest_workflow_runs
                             .filter(|workflow_run| workflow_run.event.clone() != "pull_request" || self.show_pull_requests)
-                            .filter(|workflow_run| workflow_run.conclusion.clone().unwrap_or_default() == "failure" || self.show_successfuls)
+                            .filter(|workflow_run| workflow_run.conclusion.clone().unwrap_or_default() != "success" || self.show_successfuls)
                             .for_each(|workflow_run| {
                                 body.row(18.0, |mut row| {
                                     row.col(|ui| { ui.label(repo_name); });
                                     row.col(|ui| {
                                         let color = match &workflow_run.conclusion {
+                                            Some(conclusion) if conclusion == "success" => Color32::LIGHT_GREEN,
                                             Some(conclusion) if conclusion == "failure" => Color32::LIGHT_RED,
-                                            _ => Color32::LIGHT_GREEN
+                                            _ => Color32::LIGHT_GRAY
                                         };
 
-                                        let conclusion = LayoutJob::simple_singleline(workflow_run.conclusion.clone().unwrap_or_default(), FontId::default(), color);
-
-                                        ui.label(conclusion);
+                                        ui.colored_label(color, workflow_run.conclusion.unwrap_or_default());
                                     });
                                     row.col(|ui| { ui.hyperlink_to(&workflow_run.name.clone().unwrap_or_default(), &workflow_run.html_url.clone()); });
                                     row.col(|ui| { ui.label(&workflow_run.event.clone()); });

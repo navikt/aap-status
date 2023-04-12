@@ -18,7 +18,7 @@ trait Scroll {
 
 struct Scrollbar;
 
-struct FixedField;
+pub struct FixedField;
 
 impl FixedField {
     fn minimum_width(width: f32, ui: &mut Ui, add_contents: impl FnOnce(&mut Ui)) {
@@ -36,7 +36,7 @@ impl FixedField {
     fn height(height: f32, ui: &mut Ui, add_contents: impl FnOnce(&mut Ui)) {
         StripBuilder::new(ui)
             .size(Size::exact(height))
-            .horizontal(|mut strip|  strip.cell(|ui| add_contents(ui)));
+            .horizontal(|mut strip| strip.cell(|ui| add_contents(ui)));
     }
 }
 
