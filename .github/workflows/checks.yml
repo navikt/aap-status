@@ -38,7 +38,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: check
-          args: --all-features --lib --target wasm32-unknown-unknown
+          args: --workspace --all-features --lib --target wasm32-unknown-unknown
 
   test:
     name: Test Suite
@@ -54,23 +54,7 @@ jobs:
       - uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --lib
-
-#  fmt:
-#    name: Rustfmt
-#    runs-on: ubuntu-latest
-#    steps:
-#      - uses: actions/checkout@v2
-#      - uses: actions-rs/toolchain@v1
-#        with:
-#          profile: minimal
-#          toolchain: stable
-#          override: true
-#          components: rustfmt
-#      - uses: actions-rs/cargo@v1
-#        with:
-#          command: fmt
-#          args: --all -- --check
+          args: --workspace
 
   clippy:
     name: Clippy
@@ -89,7 +73,7 @@ jobs:
           args: -- -D warnings
 
   trunk:
-    name: trunk
+    name: Trunk
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2

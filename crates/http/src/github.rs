@@ -47,3 +47,45 @@ pub fn get<T>(
         }
     })
 }
+
+#[cfg(test)]
+mod request {
+    use ehttp::Request;
+    use crate::github::GitHubRequest;
+
+    #[test]
+    fn method() {
+        let request = Request::github("secret.token", "some.url");
+        assert_eq!(request.method, "GET");
+    }
+
+    #[test]
+    fn url() {
+        let request = Request::github("secret.token", "some.url");
+        assert_eq!(request.url, "some.url");
+    }
+
+    #[test]
+    fn authentication_header() {
+        let request = Request::github("secret.token", "some.url");
+        assert_eq!(request.headers.get("Authorization").unwrap(), "Bearer secret.token");
+    }
+
+    #[test]
+    fn user_agent_header() {
+        let request = Request::github("secret.token", "some.url");
+        assert_eq!(request.headers.get("User-Agent").unwrap(), "rust, ehttp::fetch");
+    }
+
+    #[test]
+    fn accept_header() {
+        let request = Request::github("secret.token", "some.url");
+        assert_eq!(request.headers.get("Accept").unwrap(), "application/vnd.github+json");
+    }
+
+    #[test]
+    fn body() {
+        let request = Request::github("secret.token", "some.url");
+        assert_eq!(request.body, Vec::<u8>::new());
+    }
+}
