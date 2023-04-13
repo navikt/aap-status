@@ -8,12 +8,6 @@ version = "0.1.0"
 dependencies = [
  "console_error_panic_hook",
  "eframe",
- "egui",
- "egui_extras",
- "ehttp",
- "itertools",
- "serde",
- "serde_json",
  "tracing-subscriber",
  "tracing-wasm",
  "ui",
