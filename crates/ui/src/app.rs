@@ -1,14 +1,10 @@
-use egui::{CentralPanel, SelectableLabel, SidePanel, TextEdit, TopBottomPanel};
+use eframe::Frame;
+use egui::{CentralPanel, Context, SelectableLabel, SidePanel, TextEdit, TopBottomPanel};
+
 use crate::panel::{Panels, SelectedPanel};
 
 impl Application {
-    /// Called once before the first frame.
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        // This is also where you can customize the look and feel of egui using
-        // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
-
-        // Load previous app state (if any).
-        // Note that you must enable the `persistence` feature for this to work.
         if let Some(storage) = cc.storage {
             return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
         }
@@ -20,7 +16,7 @@ impl Application {
 impl eframe::App for Application {
     /// Called each time the UI needs repainting, which may be many times per second.
     /// Put your widgets into a `SidePanel`, `TopPanel`, `CentralPanel`, `Window` or `Area`.
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &Context, _frame: &mut Frame) {
         let Self {
             token,
             token_visible,
@@ -43,7 +39,7 @@ impl eframe::App for Application {
                 ui.group(|ui| {
                     ui.separator();
                     if ui.button("  Repositories  ").clicked() {
-                        panels.selected = SelectedPanel::Repositories;
+                        panels.selected = SelectedPanel::Repositories
                     }
                     ui.separator();
                     if ui.button("  Pull Requests ").clicked() {
@@ -51,11 +47,11 @@ impl eframe::App for Application {
                     }
                     ui.separator();
                     if ui.button("   Deployments  ").clicked() {
-                        panels.selected = SelectedPanel::Deployments;
+                        panels.selected = SelectedPanel::Deployments
                     }
                     ui.separator();
                     if ui.button("    Workflows   ").clicked() {
-                        panels.selected = SelectedPanel::WorkflowRuns;
+                        panels.selected = SelectedPanel::WorkflowRuns
                     }
                     ui.separator();
                 });
@@ -64,15 +60,14 @@ impl eframe::App for Application {
 
         CentralPanel::default().show(ctx, |ui| {
             match panels.selected {
+                SelectedPanel::Repositories => panels.paint_repositories(ui, token),
                 SelectedPanel::PullRequests => panels.paint_pull_requests(ui, token),
                 SelectedPanel::Deployments => panels.paint_deployments(ui, token),
                 SelectedPanel::WorkflowRuns => panels.paint_workflows(ui, token),
-                SelectedPanel::Repositories => panels.paint_repositories(ui, token)
-            };
+            }
         });
     }
 
-    /// Called by the frame work to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
     }
