@@ -1,11 +1,12 @@
 use egui::{ScrollArea, Ui};
 use egui_extras::{Column, Size, StripBuilder, TableBuilder};
 
-pub mod pull_requests;
-pub mod workflows;
-pub mod deployments;
-pub mod panels;
-pub mod repositories;
+pub mod app;
+pub mod panel;
+pub mod panel_deployment;
+pub mod panel_pull_request;
+pub mod panel_repository;
+pub mod panel_workflows;
 
 trait Table {
     fn create<'b>(ui: &'b mut Ui, columns: Vec<&'b str>) -> egui_extras::Table<'b>;

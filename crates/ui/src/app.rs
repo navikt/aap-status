@@ -1,6 +1,5 @@
 use egui::{CentralPanel, SelectableLabel, SidePanel, TextEdit, TopBottomPanel};
-
-use crate::ui::panels::{Panels, SelectedPanel};
+use crate::panel::{Panels, SelectedPanel};
 
 impl Application {
     /// Called once before the first frame.
@@ -42,22 +41,18 @@ impl eframe::App for Application {
             ui.vertical_centered(|ui| {
                 ui.heading("GitHub Status");
                 ui.group(|ui| {
+                    ui.separator();
                     if ui.button("  Repositories  ").clicked() {
                         panels.selected = SelectedPanel::Repositories;
                     }
                     ui.separator();
-
-
-                    ui.separator();
                     if ui.button("  Pull Requests ").clicked() {
                         panels.selected = SelectedPanel::PullRequests
                     }
-
                     ui.separator();
                     if ui.button("   Deployments  ").clicked() {
                         panels.selected = SelectedPanel::Deployments;
                     }
-
                     ui.separator();
                     if ui.button("    Workflows   ").clicked() {
                         panels.selected = SelectedPanel::WorkflowRuns;

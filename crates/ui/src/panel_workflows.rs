@@ -1,18 +1,19 @@
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 
-use eframe::epaint::Color32;
-use egui::{SelectableLabel, Ui};
+use egui::{Color32, SelectableLabel, Ui};
 use egui_extras::TableBuilder;
+use serde::{Deserialize, Serialize};
+use http::github;
+use model::repository::Repository;
+use model::workflow::{Workflow, WorkflowRun, WorkflowRuns};
 
-use crate::github;
-use crate::github::github_models::{Repo, Workflow, WorkflowRun, WorkflowRuns};
-use crate::ui::{FixedField, Scroll, Scrollbar, Table};
-use crate::ui::panels::Panel;
+use crate::{FixedField, Scroll, Scrollbar, Table};
+use crate::panel::Panel;
 
-#[derive(serde::Deserialize, serde::Serialize, Default)]
+#[derive(Deserialize, Serialize, Default)]
 pub struct WorkflowPanel {
-    repositories: Vec<Repo>,
+    repositories: Vec<Repository>,
     workflows: Arc<Mutex<BTreeMap<String, Vec<Workflow>>>>,
     workflow_runs: Arc<Mutex<BTreeMap<String, Vec<WorkflowRun>>>>,
     show_pull_requests: bool,
@@ -20,9 +21,7 @@ pub struct WorkflowPanel {
 }
 
 impl Panel for WorkflowPanel {
-    fn set_repositories(&mut self, repositories: Vec<Repo>) {
-        self.repositories = repositories
-    }
+    fn set_repositories(&mut self, repositories: Vec<Repository>) { self.repositories = repositories }
 
     fn paint(&mut self, ui: &mut Ui, token: &str) {
         ui.heading("Failed Workflows");
@@ -90,8 +89,8 @@ impl WorkflowPanel {
         self.workflow_runs.lock().unwrap().clear();
         self.repositories.clone().into_iter().for_each(|_repo| {
             let _workflow_runs = self.workflow_runs.clone();
-            let url = format!("{}/repos/navikt/{}/actions/runs?per_page=15", github::HOST, _repo.name);
-            github::fetch_lifetime::<WorkflowRuns>(token, &url, move |response| {
+            let url = format!("/repos/navikt/{}/actions/runs?per_page=15", _repo.name);
+            github::get_path::<WorkflowRuns>(token, &url, move |response| {
                 if let Ok(workflow_runs) = response {
                     *_workflow_runs.lock().unwrap()
                         .entry(_repo.clone().name)

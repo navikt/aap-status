@@ -1,62 +1,63 @@
 use std::sync::{Arc, Mutex};
 
-use eframe::epaint::{Color32, FontId};
-use eframe::epaint::text::LayoutJob;
-use egui::Ui;
+use egui::{Color32, FontId, Ui};
+use egui::text::LayoutJob;
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 
-use crate::github;
-use crate::github::github_models::{Repo, Team};
-use crate::github::HOST;
-use crate::ui::panels::Panel;
+use http::github;
+use model::repository::Repository;
+use model::team::Team;
 
-#[derive(serde::Deserialize, serde::Serialize, Default)]
+use crate::panel::Panel;
+
+#[derive(Deserialize, Serialize, Default)]
 pub struct RepositoriesPanel {
-    repositories: Arc<Mutex<Vec<Repo>>>,
-    blacklisted: Arc<Mutex<Vec<Repo>>>,
-    team: Arc<Mutex<Team>>,
+    repositories: Arc<Mutex<Vec<Repository>>>,
+    blacklisted: Arc<Mutex<Vec<Repository>>>,
+    team: Arc<Mutex<Option<Team>>>,
     team_name: String,
 }
 
 impl Panel for RepositoriesPanel {
-    fn set_repositories(&mut self, _: Vec<Repo>) {}
+    fn set_repositories(&mut self, _: Vec<Repository>) {}
 
     fn paint(&mut self, ui: &mut Ui, token: &str) {
         ui.heading("Repositories");
 
         ui.horizontal_wrapped(|ui| {
             ui.label("Team");
-            if ui.text_edit_singleline(&mut self.team_name).lost_focus() {
+            if ui.text_edit_singleline(&mut self.team_name).lost_focus() {}
+            if ui.button("Select").clicked() {
                 self.fetch_team(token, self.team_name.clone());
-            }
-            if ui.button("Fetch").clicked() {
-                self.fetch_repositories(token);
             }
         });
         ui.separator();
+
+        self.team_info(ui, token);
+        ui.separator();
+
         ui.horizontal_top(|ui| {
             ui.group(|ui| self.whitelisted(ui));
             ui.group(|ui| self.blacklisted(ui));
-            ui.group(|ui| self.team_info(ui));
+            // ui.group(|ui| self.team_info(ui));
         });
     }
 }
 
 impl RepositoriesPanel {
-    pub fn repositories(&self) -> Vec<Repo> {
+    pub fn repositories(&self) -> Vec<Repository> {
         self.repositories.lock().unwrap().clone()
     }
 
-    pub fn blacklisted_repositories(&self) -> Vec<Repo> {
-        self.blacklisted.lock().unwrap().clone()
-    }
+    pub fn blacklisted_repositories(&self) -> Vec<Repository> { self.blacklisted.lock().unwrap().clone() }
 
-    pub fn whitelist_repository(&self, repo: Repo) {
+    pub fn whitelist_repository(&self, repo: Repository) {
         self.repositories.lock().unwrap().push(repo.clone());
         self.blacklisted.clone().lock().unwrap().retain(|it| *it != repo.clone());
     }
 
-    pub fn blacklist_repository(&self, repo: Repo) {
+    pub fn blacklist_repository(&self, repo: Repository) {
         self.blacklisted.lock().unwrap().push(repo.clone());
         self.repositories.lock().unwrap().retain(|it| *it != repo.clone());
     }
@@ -96,28 +97,41 @@ impl RepositoriesPanel {
         });
     }
 
-    fn team_info(&mut self, ui: &mut Ui) {
-        ui.vertical(|ui| {
-            ui.heading("Team");
-            ui.label(format!("{}", self.team.lock().unwrap().clone()))
-        });
+    fn team_info(&mut self, ui: &mut Ui, token: &str) {
+        let team = self.team.lock().unwrap().clone();
+        match team {
+            Some(team) => {
+                ui.vertical(|ui| {
+                    ui.hyperlink_to("Members", format!("https://github.com/orgs/navikt/teams/{}/members", team.name));
+                    ui.label(team.description.unwrap_or_default());
+                    if ui.button("Fetch repositories").clicked() {
+                        self.fetch_repositories(token);
+                    }
+                });
+            },
+            None => {
+                ui.label("No team selected.");
+            }
+        }
     }
 
     fn fetch_team(&self, token: &str, team_name: String) {
         let _team = self.team.clone();
-        github::fetch_lifetime::<Team>(token, &format!("{}/orgs/navikt/teams/{}", HOST, &team_name), move |response| {
-            if let Ok(team) = response {
-                *_team.lock().unwrap() = team
+        let url = format!("/orgs/navikt/teams/{}", &team_name);
+        github::get_path::<Team>(token, &url, move |response| {
+            match response {
+                Ok(team) => *_team.lock().unwrap() = Some(team),
+                Err(e) => eprintln!("team failed: {}", e)
             }
         });
     }
 
     fn fetch_repositories(&mut self, token: &str) {
         let _repositories = self.repositories.clone();
-        let _team = self.team.lock().unwrap().clone();
+        let _team = self.team.lock().unwrap().clone().unwrap(); // button is only visible if this is Some
         let _blacklisted = self.blacklisted.lock().unwrap().clone();
         let url = format!("{}{}", &_team.repositories_url, "?per_page=100");
-        github::fetch_lifetime::<Vec<Repo>>(token, &url, move |response| {
+        github::get::<Vec<Repository>>(token, &url, move |response| {
             if let Ok(repositories) = response {
                 let result = repositories.into_iter()
                     .filter(|repo| !_blacklisted.contains(repo))

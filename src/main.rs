@@ -1,7 +1,7 @@
 #![warn(clippy::all, rust_2018_idioms)]
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")] // hide console window on Windows in release
 
-use aap_status::Application;
+use ui::app::Application;
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() {
@@ -10,7 +10,7 @@ fn main() {
 
     let native_options = eframe::NativeOptions::default();
     eframe::run_native(
-        "AAP Status",
+        "AAP GitHub Status",
         native_options,
         Box::new(|cc| Box::new(Application::new(cc))),
     ).expect("Failed to start native");

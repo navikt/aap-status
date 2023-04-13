@@ -2,24 +2,28 @@ use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
 use std::vec::IntoIter;
 
-use egui::Ui;
+use egui::{Color32, Ui};
 use itertools::Itertools;
+use serde::{Deserialize, Serialize};
 
-use crate::github;
-use crate::github::github_models::{Deployment, Environment, Environments, Repo, Status};
-use crate::ui::{FixedField, Scroll, Scrollbar};
-use crate::ui::panels::Panel;
+use http::github;
+use model::deployment::{Deployment, State, Status};
+use model::environment::{Environment, Environments};
+use model::repository::Repository;
 
-#[derive(serde::Deserialize, serde::Serialize, Default)]
+use crate::{FixedField, Scroll, Scrollbar};
+use crate::panel::Panel;
+
+#[derive(Deserialize, Serialize, Default)]
 pub struct DeploymentPanel {
-    repositories: Vec<Repo>,
+    repositories: Vec<Repository>,
     deployments: Arc<Mutex<BTreeMap<String, Vec<Deployment>>>>,
     statuses: Arc<Mutex<BTreeMap<i64, Status>>>,
     environments: Arc<Mutex<Vec<Environment>>>,
 }
 
 impl Panel for DeploymentPanel {
-    fn set_repositories(&mut self, repositories: Vec<Repo>) {
+    fn set_repositories(&mut self, repositories: Vec<Repository>) {
         self.repositories = repositories
     }
 
@@ -27,11 +31,11 @@ impl Panel for DeploymentPanel {
         ui.heading("Deployments");
 
         ui.horizontal_wrapped(|ui| {
-            if ui.button("Refresh").clicked() {
+            if ui.button("Refresh environments").clicked() {
                 self.refresh_deployments(token);
             }
 
-            if ui.button("Refresh statuses").clicked() {
+            if ui.button("Refresh deployments").clicked() {
                 self.refresh_statuses(token);
             }
         });
@@ -54,7 +58,7 @@ impl Panel for DeploymentPanel {
                                                                 ui.label(&repository.name.clone());
                                                             });
                                                             FixedField::height(60.0, ui, |ui| {
-                                                                ui.label(status.colored_state());
+                                                                ui.colored_label(status.color(), status.state.to_string());
                                                             });
                                                             FixedField::height(200.0, ui, |ui| {
                                                                 ui.label(status.description());
@@ -75,8 +79,24 @@ impl Panel for DeploymentPanel {
     }
 }
 
+trait StateColor { fn color(&self) -> Color32; }
+
+impl StateColor for Status {
+    fn color(&self) -> Color32 {
+        match self.state {
+            State::Error => Color32::LIGHT_RED,
+            State::Failure => Color32::LIGHT_RED,
+            State::Inactive => Color32::LIGHT_GRAY,
+            State::Pending => Color32::LIGHT_BLUE,
+            State::Success => Color32::LIGHT_GREEN,
+            State::Queued => Color32::LIGHT_BLUE,
+            State::InProgress => Color32::LIGHT_RED
+        }
+    }
+}
+
 impl DeploymentPanel {
-    fn repositories(&self) -> IntoIter<Repo> {
+    fn repositories(&self) -> IntoIter<Repository> {
         self.repositories.clone().into_iter()
     }
 
@@ -142,10 +162,10 @@ impl DeploymentPanel {
 
 fn refresh_deployment(
     token: &str,
-    repo: &Repo,
+    repo: &Repository,
     on_refreshed: impl FnOnce(Vec<Deployment>) + Send + 'static,
 ) {
-    github::fetch_lifetime::<Vec<Deployment>>(token, &repo.deployments_url.clone(), |response| {
+    github::get::<Vec<Deployment>>(token, &repo.deployments_url.clone(), |response| {
         if let Ok(deployments) = response {
             on_refreshed(deployments)
         }
@@ -157,7 +177,7 @@ fn refresh_status(
     deployment: &Deployment,
     on_refreshed: impl FnOnce(Vec<Status>) + Send + 'static,
 ) {
-    github::fetch_lifetime::<Vec<Status>>(token, &deployment.statuses_url, |response| {
+    github::get::<Vec<Status>>(token, &deployment.statuses_url, |response| {
         if let Ok(statuses) = response {
             on_refreshed(statuses)
         }
@@ -166,10 +186,10 @@ fn refresh_status(
 
 fn refresh_environment(
     token: &str,
-    repository: &Repo,
+    repository: &Repository,
     on_refreshed: impl FnOnce(Vec<Environment>) + Send + 'static,
 ) {
-    github::fetch_lifetime::<Environments>(token, &format!("{}/repos/navikt/{}/environments", github::HOST, repository.name), |response| {
+    github::get_path::<Environments>(token, &format!("/repos/navikt/{}/environments", repository.name), |response| {
         if let Ok(environments) = response {
             on_refreshed(environments.environments);
         }

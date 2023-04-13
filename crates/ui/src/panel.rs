@@ -1,10 +1,9 @@
 use egui::Ui;
-use crate::github::github_models::Repo;
-
-use crate::ui::deployments::DeploymentPanel;
-use crate::ui::pull_requests::PullRequestsPanel;
-use crate::ui::repositories::RepositoriesPanel;
-use crate::ui::workflows::WorkflowPanel;
+use model::repository::Repository;
+use crate::panel_deployment::DeploymentPanel;
+use crate::panel_pull_request::PullRequestsPanel;
+use crate::panel_repository::RepositoriesPanel;
+use crate::panel_workflows::WorkflowPanel;
 
 #[derive(serde::Deserialize, serde::Serialize, Default)]
 pub enum SelectedPanel {
@@ -16,7 +15,7 @@ pub enum SelectedPanel {
 }
 
 pub trait Panel {
-    fn set_repositories(&mut self, repositories: Vec<Repo>);
+    fn set_repositories(&mut self, repositories: Vec<Repository>);
     fn paint(&mut self, ui: &mut Ui, token: &str);
 }
 
