@@ -135,6 +135,7 @@ impl RepositoriesPanel {
             if let Ok(repositories) = response {
                 let result = repositories.into_iter()
                     .filter(|repo| !_blacklisted.contains(repo))
+                    .filter(|repo| !repo.archived)
                     .collect_vec();
 
                 *_repositories.lock().unwrap() = result;

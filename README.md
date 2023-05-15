@@ -23,7 +23,7 @@ Defines a workspace and its members.
 Defines dependencies and local crates to be available uppon request.
 
 #### `[dependencies]` 
-The dependencies/crates necessary to run [src/main.rs](src/main.rs)
+The dependencies/crates necessary to run [src/main.rs](src/lib)
 
 #### `[target.'cfg(not(target_arch = "wasm32"))'.dependencies]`
 Dependencies used when running native.

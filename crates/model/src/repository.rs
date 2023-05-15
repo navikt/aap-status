@@ -11,6 +11,7 @@ pub struct Repository {
     pub releases_url: String,
     pulls_url: String,
     pub description: Option<String>,
+    pub archived: bool,
 }
 
 impl Repository {
