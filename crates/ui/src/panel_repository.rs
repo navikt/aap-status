@@ -14,8 +14,8 @@ use crate::panel::Panel;
 #[derive(Deserialize, Serialize, Default)]
 pub struct RepositoriesPanel {
     repositories: Arc<Mutex<Vec<Repository>>>,
-    archived: Arc<Mutex<Vec<Repository>>>,
     blacklisted: Arc<Mutex<Vec<Repository>>>,
+    archived: Arc<Mutex<Vec<Repository>>>,
     team: Arc<Mutex<Option<Team>>>,
     team_name: String,
 }
@@ -41,6 +41,7 @@ impl Panel for RepositoriesPanel {
         ui.horizontal_top(|ui| {
             ui.group(|ui| self.whitelisted(ui));
             ui.group(|ui| self.blacklisted(ui));
+            ui.group(|ui| self.archived(ui));
             // ui.group(|ui| self.team_info(ui));
         });
     }
@@ -98,6 +99,16 @@ impl RepositoriesPanel {
         });
     }
 
+    fn archived(&mut self, ui: &mut Ui) {
+        ui.vertical(|ui| {
+            ui.heading(format!("Archived: {}", self.archived.lock().unwrap().len()));
+    
+            self.archived.lock().unwrap().iter().for_each(|repo| {
+                ui.label(&repo.name);
+            });
+        });
+    }
+
     fn team_info(&mut self, ui: &mut Ui, token: &str) {
         let team = self.team.lock().unwrap().clone();
         match team {
@@ -131,15 +142,27 @@ impl RepositoriesPanel {
         let _repositories = self.repositories.clone();
         let _team = self.team.lock().unwrap().clone().unwrap(); // button is only visible if this is Some
         let _blacklisted = self.blacklisted.lock().unwrap().clone();
+        let _archived = self.archived.clone();
         let url = format!("{}{}", &_team.repositories_url, "?per_page=100");
         github::get::<Vec<Repository>>(token, &url, move |response| {
             if let Ok(repositories) = response {
-                let result = repositories.into_iter()
+                let repos = repositories
+                    .clone()
+                    .into_iter()
                     .filter(|repo| !_blacklisted.contains(repo))
                     .filter(|repo| !repo.archived)
                     .collect_vec();
 
-                *_repositories.lock().unwrap() = result;
+                *_repositories.lock().unwrap() = repos;
+
+                let archived = repositories
+                    .clone()
+                    .into_iter()
+                    .filter(|repo| !_blacklisted.contains(repo))
+                    .filter(|repo| repo.archived)
+                    .collect_vec();
+
+                *_archived.lock().unwrap() = archived;
             }
         });
     }
