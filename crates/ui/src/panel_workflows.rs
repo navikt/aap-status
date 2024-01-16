@@ -18,10 +18,12 @@ pub struct WorkflowPanel {
     workflow_runs: Arc<Mutex<BTreeMap<String, Vec<WorkflowRun>>>>,
     show_pull_requests: bool,
     show_successfuls: bool,
+    client: github::Client,
 }
 
 impl Panel for WorkflowPanel {
     fn set_repositories(&mut self, repositories: Vec<Repository>) { self.repositories = repositories }
+    fn set_client(&mut self, client: github::Client) { self.client = client }
 
     fn paint(&mut self, ui: &mut Ui, token: &str) {
         ui.heading("Failed Workflows");
@@ -90,8 +92,17 @@ impl WorkflowPanel {
         self.repositories.clone().into_iter().for_each(|_repo| {
             let _workflow_runs = self.workflow_runs.clone();
             let url = format!("/repos/navikt/{}/actions/runs?per_page=15", _repo.name);
-            github::get_path::<WorkflowRuns>(token, &url, move |response| {
-                if let Ok(workflow_runs) = response {
+            let mut client = self.client.clone();
+            self.client.get_path(token, &url, move |response| {
+                if let Ok(response) = response {
+
+                    if let Some(remaining) = response.headers.get("x-ratelimit-remaining") {
+                        let remaining = remaining.parse::<usize>().unwrap();
+                        client.set_rate_limit(remaining);
+                    }
+
+                    let workflow_runs = serde_json::from_slice::<WorkflowRuns>(&response.bytes).unwrap_or_default();
+
                     *_workflow_runs.lock().unwrap()
                         .entry(_repo.clone().name)
                         .or_default() = workflow_runs.workflow_runs;

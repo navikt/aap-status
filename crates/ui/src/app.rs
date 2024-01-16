@@ -30,6 +30,8 @@ impl eframe::App for Application {
                 if ui.add(SelectableLabel::new(*token_visible, "👁")).on_hover_text("Show/hide token").clicked() {
                     *token_visible = !*token_visible;
                 };
+            
+                ui.label(format!("{} API requests remaining until {}", panels.rate_limit(), panels.rate_limit_reset()));
             });
         });
 
@@ -38,20 +40,22 @@ impl eframe::App for Application {
                 ui.heading("GitHub Status");
                 ui.group(|ui| {
                     ui.separator();
+                    let client = panels.selected.get_client();
+
                     if ui.button("  Repositories  ").clicked() {
-                        panels.selected = SelectedPanel::Repositories
+                        panels.selected = SelectedPanel::Repositories(client.clone())
                     }
                     ui.separator();
                     if ui.button("  Pull Requests ").clicked() {
-                        panels.selected = SelectedPanel::PullRequests
+                        panels.selected = SelectedPanel::PullRequests(client.clone())
                     }
                     ui.separator();
                     if ui.button("   Deployments  ").clicked() {
-                        panels.selected = SelectedPanel::Deployments
+                        panels.selected = SelectedPanel::Deployments(client.clone())
                     }
                     ui.separator();
                     if ui.button("    Workflows   ").clicked() {
-                        panels.selected = SelectedPanel::WorkflowRuns
+                        panels.selected = SelectedPanel::WorkflowRuns(client.clone())
                     }
                     ui.separator();
                 });
@@ -60,10 +64,10 @@ impl eframe::App for Application {
 
         CentralPanel::default().show(ctx, |ui| {
             match panels.selected {
-                SelectedPanel::Repositories => panels.paint_repositories(ui, token),
-                SelectedPanel::PullRequests => panels.paint_pull_requests(ui, token),
-                SelectedPanel::Deployments => panels.paint_deployments(ui, token),
-                SelectedPanel::WorkflowRuns => panels.paint_workflows(ui, token),
+                SelectedPanel::Repositories(_) => panels.paint_repositories(ui, token),
+                SelectedPanel::PullRequests(_) => panels.paint_pull_requests(ui, token),
+                SelectedPanel::Deployments(_) => panels.paint_deployments(ui, token),
+                SelectedPanel::WorkflowRuns(_) => panels.paint_workflows(ui, token),
             }
         });
     }

@@ -16,10 +16,12 @@ use crate::panel::Panel;
 pub struct PullRequestsPanel {
     repositories: Vec<Repository>,
     pull_requests: Arc<Mutex<Vec<PullRequest>>>,
+    client: github::Client,
 }
 
 impl Panel for PullRequestsPanel {
     fn set_repositories(&mut self, repositories: Vec<Repository>) { self.repositories = repositories }
+    fn set_client(&mut self, client: github::Client) { self.client = client }
 
     fn paint(&mut self, ui: &mut Ui, token: &str) {
         ui.heading("Pull Requests");
@@ -28,8 +30,16 @@ impl Panel for PullRequestsPanel {
             self.clear_pull_requests();
             self.repositories().for_each(|repo| {
                 let _pulls = self.pull_requests.clone();
-                github::get::<Vec<PullRequest>>(token, repo.pulls_url(), move |response| {
-                    if let Ok(pull_requests) = response {
+                let mut client = self.client.clone();
+                self.client.get(token, repo.pulls_url(), move |response| {
+                    if let Ok(response) = response {
+                        
+                        if let Some(remaining) = response.headers.get("x-ratelimit-remaining") {
+                            let remaining = remaining.parse::<usize>().unwrap();
+                            client.set_rate_limit(remaining);
+                        }
+
+                        let pull_requests = serde_json::from_slice::<Vec<PullRequest>>(&response.bytes).unwrap_or_default(); 
                         _pulls.lock().unwrap().extend(pull_requests);
                     }
                 });

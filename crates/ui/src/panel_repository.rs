@@ -2,10 +2,10 @@ use std::sync::{Arc, Mutex};
 
 use egui::{Color32, FontId, Ui};
 use egui::text::LayoutJob;
+use http::github::{Client, self};
 use itertools::Itertools;
 use serde::{Deserialize, Serialize};
 
-use http::github;
 use model::repository::Repository;
 use model::team::Team;
 
@@ -18,10 +18,12 @@ pub struct RepositoriesPanel {
     archived: Arc<Mutex<Vec<Repository>>>,
     team: Arc<Mutex<Option<Team>>>,
     team_name: String,
+    client: Client,
 }
 
 impl Panel for RepositoriesPanel {
     fn set_repositories(&mut self, _: Vec<Repository>) {}
+    fn set_client(&mut self, client: github::Client) { self.client = client }
 
     fn paint(&mut self, ui: &mut Ui, token: &str) {
         ui.heading("Repositories");
@@ -129,13 +131,19 @@ impl RepositoriesPanel {
         }
     }
 
-    fn fetch_team(&self, token: &str, team_name: String) {
+    fn fetch_team(&mut self, token: &str, team_name: String) {
         let _team = self.team.clone();
         let url = format!("/orgs/navikt/teams/{}", &team_name);
-        github::get_path::<Team>(token, &url, move |response| {
-            match response {
-                Ok(team) => *_team.lock().unwrap() = Some(team),
-                Err(e) => eprintln!("team failed: {}", e)
+        let mut client = self.client.clone();
+        self.client.get_path(token, &url, move |response| {
+            if let Ok(response) = response {
+                if let Some(remaining) = response.headers.get("x-ratelimit-remaining") {
+                    let remaining = remaining.parse::<usize>().unwrap();
+                    client.set_rate_limit(remaining);
+                }
+
+                let team = serde_json::from_slice::<Team>(&response.bytes).unwrap_or_default();
+                *_team.lock().unwrap() = Some(team);
             }
         });
     }
@@ -146,8 +154,16 @@ impl RepositoriesPanel {
         let _blacklisted = self.blacklisted.lock().unwrap().clone();
         let _archived = self.archived.clone();
         let url = format!("{}{}", &_team.repositories_url, "?per_page=100");
-        github::get::<Vec<Repository>>(token, &url, move |response| {
-            if let Ok(repositories) = response {
+        let mut client = self.client.clone();
+        self.client.get(token, &url, move |response| {
+            if let Ok(response) = response {
+                
+                if let Some(remaining) = response.headers.get("x-ratelimit-remaining") {
+                    let remaining = remaining.parse::<usize>().unwrap();
+                    client.set_rate_limit(remaining);
+                }
+
+                let repositories = serde_json::from_slice::<Vec<Repository>>(&response.bytes).unwrap_or_default();
                 let repos = repositories
                     .clone()
                     .into_iter()

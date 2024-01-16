@@ -1,4 +1,5 @@
 use egui::Ui;
+use http::github::Client;
 use serde::{Deserialize, Serialize};
 
 use model::repository::Repository;
@@ -8,13 +9,29 @@ use crate::panel_pull_request::PullRequestsPanel;
 use crate::panel_repository::RepositoriesPanel;
 use crate::panel_workflows::WorkflowPanel;
 
-#[derive(Deserialize, Serialize, Default)]
+#[derive(Deserialize, Serialize, Clone)]
 pub enum SelectedPanel {
-    PullRequests,
-    Deployments,
-    WorkflowRuns,
-    #[default]
-    Repositories,
+    Repositories(Client),
+    PullRequests(Client),
+    Deployments(Client),
+    WorkflowRuns(Client),
+}
+
+impl Default for SelectedPanel {
+    fn default() -> Self {
+        SelectedPanel::Repositories(Client::default())
+    }
+}
+
+impl SelectedPanel {
+    pub fn get_client(&self) -> Client {
+        match self {
+            SelectedPanel::Repositories(client) => client.clone(),
+            SelectedPanel::PullRequests(client) => client.clone(),
+            SelectedPanel::Deployments(client) => client.clone(),
+            SelectedPanel::WorkflowRuns(client) => client.clone(),
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Default)]
@@ -27,6 +44,14 @@ pub struct Panels {
 }
 
 impl Panels {
+    pub fn rate_limit(&self) -> usize {
+        self.selected.get_client().get_rate_limit()
+    }
+
+    pub fn rate_limit_reset(&self) -> u64 {
+        self.selected.get_client().get_rate_reset()
+    }
+
     pub fn paint_repositories(&mut self, ui: &mut Ui, token: &str) {
         self.repositories.paint(ui, token);
     }
@@ -49,5 +74,6 @@ impl Panels {
 
 pub trait Panel {
     fn set_repositories(&mut self, repositories: Vec<Repository>);
+    fn set_client(&mut self, client: Client);
     fn paint(&mut self, ui: &mut Ui, token: &str);
 }
