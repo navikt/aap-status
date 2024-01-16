@@ -28,7 +28,9 @@ impl Panel for RepositoriesPanel {
 
         ui.horizontal_wrapped(|ui| {
             ui.label("Team");
-            //if ui.text_edit_singleline(&mut self.team_name).lost_focus() {}
+            if ui.text_edit_singleline(&mut self.team_name).lost_focus() {
+                println!("team edit field lost focus");
+            }
             if ui.button("Select").clicked() {
                 self.fetch_team(token, self.team_name.clone());
             }
