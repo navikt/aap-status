@@ -14,6 +14,7 @@ use crate::panel::Panel;
 #[derive(Deserialize, Serialize, Default)]
 pub struct RepositoriesPanel {
     repositories: Arc<Mutex<Vec<Repository>>>,
+    archived: Arc<Mutex<Vec<Repository>>>,
     blacklisted: Arc<Mutex<Vec<Repository>>>,
     team: Arc<Mutex<Option<Team>>>,
     team_name: String,
@@ -27,7 +28,7 @@ impl Panel for RepositoriesPanel {
 
         ui.horizontal_wrapped(|ui| {
             ui.label("Team");
-            if ui.text_edit_singleline(&mut self.team_name).lost_focus() {}
+            //if ui.text_edit_singleline(&mut self.team_name).lost_focus() {}
             if ui.button("Select").clicked() {
                 self.fetch_team(token, self.team_name.clone());
             }

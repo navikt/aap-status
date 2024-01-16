@@ -154,7 +154,7 @@ impl DeploymentPanel {
                     .into_iter()
                     .map(|(_, group)| group.max_by(|x, y| x.id.cmp(&y.id)).unwrap()).collect_vec();
 
-                *deployments.lock().unwrap().entry(repository_name).or_insert(Vec::default()) = last_deployments_per_environment;
+                *deployments.lock().unwrap().entry(repository_name).or_default() = last_deployments_per_environment;
             });
         });
     }

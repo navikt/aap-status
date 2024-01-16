@@ -94,7 +94,7 @@ impl WorkflowPanel {
                 if let Ok(workflow_runs) = response {
                     *_workflow_runs.lock().unwrap()
                         .entry(_repo.clone().name)
-                        .or_insert(Vec::default()) = workflow_runs.workflow_runs;
+                        .or_default() = workflow_runs.workflow_runs;
                 }
             });
         });
