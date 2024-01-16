@@ -30,8 +30,9 @@ impl eframe::App for Application {
                 if ui.add(SelectableLabel::new(*token_visible, "👁")).on_hover_text("Show/hide token").clicked() {
                     *token_visible = !*token_visible;
                 };
-            
-                ui.label(format!("{} API requests remaining until {}", panels.rate_limit(), panels.rate_limit_reset()));
+           
+                let client = panels.selected.get_client();
+                ui.label(format!("{} API requests remaining until {}", client.get_rate_limit(), client.get_rate_reset()));
             });
         });
 
@@ -83,3 +84,4 @@ pub struct Application {
     token_visible: bool,
     panels: Panels,
 }
+
